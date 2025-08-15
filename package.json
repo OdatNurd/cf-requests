@@ -1,0 +1,37 @@
+{
+  "name": "@odatnurd/cf-requests",
+  "version": "{{VERSION}}",
+  "description": "Simple Cloudflare Hono request wrapper",
+  "author": "OdatNurd (https://odatnurd.net)",
+  "homepage": "https://github.com/OdatNurd/cf-requests",
+  "bugs": "https://github.com/OdatNurd/cf-requests/issues",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OdatNurd/cf-requests"
+  },
+  "type": "module",
+  "main": "lib/handlers.js",
+  "exports": {
+    ".": "./lib/handlers.js"
+  },
+  "scripts": {
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "files": [
+    "lib/handlers.js"
+  ],
+  "keywords": [
+    "cloudflare",
+    "hono",
+    "routing"
+  ],
+  "peerDependencies": {
+    "hono": "^4.7.0"
+  },
+  "packageManager": "pnpm@10.6.3",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+    ]
+  }
+}

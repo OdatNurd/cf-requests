@@ -1,0 +1,15 @@
+name: Publish to NPMJS
+
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  publish-npm-package-after-testing:
+    uses: odatnurd/github-workflows/.github/workflows/npm-publish.yaml@master
+    with:
+      node-version: 20
+      package-version: $GITHUB_REF_NAME
+    secrets:
+      npm-auth-token: ${{ secrets.NPM_PUBLISH }}
