@@ -56,9 +56,6 @@ fields declared by the schema are present.
 
 
 ```js
-/******************************************************************************/
-
-
 import { validate, success, routeHandler } from '#lib/common';
 
 import * as testSchema from '#schemas/test';
@@ -79,7 +76,6 @@ export const $post = routeHandler(
     return success(ctx, 'request body validated', body);
   },
 );
-
 ```
 
 ## Methods
@@ -140,27 +136,6 @@ On success, the data is placed in the context. If the data does not pass the
 validation of the schema, the `fail()` method is invoked on it with a status of
 `422` to signify the issue directly.
 
-Execute a fetch operation on the provided database, using the data in `sqlargs`
-to create the statement(s) to be executed, and return the result(s) of the
-query after logging statistics such as the rows read and written, which will be
-annotated with the action string provided to give context to the operation.
-
-The provided `sqlargs` is a variable length list of arguments that consists of
-strings to be compiled to SQL, previously compiled statements, and/or arrays of
-values to bind to statements.
-
-For the purposes of binding, arrays will bind to the most recently seen
-statement, allowing you to compile one statement and bind it multiple times if
-desired.
-
-When more than one statement is provided, all statements will be executed as a
-batch operation, which implicitly runs as a transaction.
-
-The return value is the direct result of executing the query or queries given
-in `sqlargs`; this is either a (potentially empty) array of result rows, or an
-array of such arrays (if a batch). As with `dbRawQuery`, the `meta` is stripped
-from the results, providing you just the actual query result.
-
 ---
 
 ```js
@@ -183,6 +158,10 @@ export const $post = [
 
   body(async (ctx) => {
     const body = ctx.req.valid('json');
+
+    if (body.key1 != 69) {
+      throw new Error('key is not nice');
+    }
 
     return success(ctx, 'code test worked', body);
   }),
