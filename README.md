@@ -84,11 +84,13 @@ export const $post = routeHandler(
 export function success(ctx, message, result, status) {}
 ```
 
-Indicate a successful return in JSON with the given `HTTP` status code:
+Indicate a successful return in JSON with the given `HTTP` status code; the
+status code is used to construct the JSON as well as the response:
 
 ```js
 {
     "success": true,
+    status,
     message,
     data: result
 }
