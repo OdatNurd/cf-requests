@@ -26,7 +26,7 @@ export function initializeRequestChecks() {
   );
 
   addCheck.value.isResponseWithStatus(
-    (source, status) => source instanceof Response && source.status == status
+    (source, status) => source instanceof Response && source.status === status
   );
 }
 
@@ -78,14 +78,17 @@ export async function schemaTest(dataType, schema, data, validator) {
       param: () => data,
       json: async () => data,
       query: () => data,
+      header: () => data,
+      cookie: () => data,
+      form: async () => data,
 
       // The validator invokes this to get headers out of the request when the
       // data type is JSON.
       header: (name) => {
-        if (name.toLowerCase() === 'content-type' && dataType === 'json') {
-          return 'application/json';
-        }
-        return undefined;
+        return name.toLowerCase() !== 'content-type' ? undefined : {
+          json: 'application/json',
+          form: 'multipart/form-data',
+        }[dataType];
       },
 
       // When validation succeeds, it invokes this to store the data back into
