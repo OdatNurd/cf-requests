@@ -13,25 +13,27 @@
   "type": "module",
   "main": "lib/handlers.js",
   "exports": {
-    ".": "./lib/handlers.js"
+    ".": "./lib/handlers.js",
+    "./aegis": "./aegis/index.js"
   },
   "scripts": {
     "test": "echo \"No tests specified\" && exit 0"
   },
   "files": [
-    "lib/handlers.js"
+    "lib",
+    "aegis"
   ],
   "keywords": [
     "cloudflare",
     "hono",
-    "routing"
+    "routing",
+    "aegis"
   ],
   "peerDependencies": {
     "hono": "^4.7.0"
   },
-  "packageManager": "pnpm@10.6.3",
+  "packageManager": "pnpm@10.15.1",
   "pnpm": {
-    "onlyBuiltDependencies": [
-    ]
+    "onlyBuiltDependencies": []
   }
 }

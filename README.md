@@ -78,6 +78,102 @@ export const $post = routeHandler(
 );
 ```
 
+
+## Testing Utilities (Optional)
+
+This package includes an optional set of helpers to facilitate testing your own
+projects with the [Aegis](https://www.npmjs.com/package/@axel669/aegis) test
+runner.
+
+To use these utilities, you must install the required peer dependencies into
+your own project's `devDependencies` if you have not already done so.
+
+```sh
+pnpm add -D @odatnurd/d1-query @axel669/aegis miniflare fs-jetpack
+```
+
+> ℹ️ If you are actively using
+> [@odatnurd/d1-query](https://www.npmjs.com/package/@odatnurd/d1-query) in your
+> project, that library should be installed as a regular `dependency` and not a
+> `devDependency`
+
+The `@odatnurd/cf-requests` module exports the following functions:
+
+
+### Helper Functions
+
+```javascript
+export function initializeResponseChecks() {}
+```
+Registers all [custom checks](#custom-checks) with Aegis. This should be called
+once at the top of your `aegis.config.js` file.
+
+---
+
+```javascript
+export async function schemaTest(dataType, schema, data, validator = undefined) {}
+```
+Takes a `dataType` and `schema` as would be provided to the `validate` function
+and runs the validation to see what the result is. The function will return
+either:
+
+ * `Valid Data`: An Object that represents the validated and masked data
+ * `Invalid Data`: A `Response` object that carries the error payload
+
+Using this, it is possible to validate that a schema works as expected without
+having to use it in the actual request first.
+
+> ℹ️ By default, the test will use the `validate` function to perform the data
+> validation. If desired, you can pass an optional `validator` function as the
+> final argument. This must take the same arguments as `validate` does, and
+> follow the same contract. This allows for testing of other schema libraries,
+> such as during migrations to this library.
+
+
+### Configuration
+
+You can import the helper functions into your `aegis.config.js` file to easily
+set up a test environment, optionally also populating one or more SQL files into
+the database first in order to set up testing.
+
+**Example `aegis.config.js`:**
+
+```js
+import { initializeCustomChecks, aegisSetup, aegisTeardown } from '@odatnurd/cf-aegis';
+import { initializeResponseChecks } from '@odatnurd/cf-requests/aegis';
+
+initializeCustomChecks();
+initializeResponseChecks()
+
+export const config = {
+    files: [
+        "test/**/*.test.js",
+    ],
+    hooks: {
+        async setup(ctx) {
+            await aegisSetup(ctx, 'test/setup.sql', 'DB');
+        },
+
+        async teardown(ctx) {
+            await aegisTeardown(ctx);
+        },
+    },
+    failAction: "afterSection",
+}
+```
+
+
+### Custom Checks
+
+The `initializeResponseChecks()` function registers several custom checks with Aegis
+to simplify testing database-related logic.
+
+* `.isResponse($)`: Checks if a value is a `Response` object.
+* `.isNotResponse($)`: Checks if a value is not a `Response` object.
+* `.isResponseWithStatus($, count)`: Checks if an object is a `Response` with a
+  specific `status` code.
+
+
 ## Methods
 
 ```js
