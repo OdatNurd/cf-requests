@@ -16,6 +16,9 @@ and allowing file based in Cloudflare Workers, where that is not directly
 possible. This again is not strictly required, but examples below assume that
 this is the case.
 
+> ℹ️ Technically, the validation wrapper will accept any validator (e.g. zod) as
+> long as the object passed in conforms to the validation contract; see below.
+
 
 ## Installation
 
@@ -37,7 +40,7 @@ forward.
 ### Example
 
 Assuming a file named `test.joker.json` that contains the following Joker
-schema:
+schema, and and you are using the Joker Rollup plugin:
 
 ```json
 {
@@ -58,6 +61,7 @@ fields declared by the schema are present.
 ```js
 import { validate, success, routeHandler } from '#lib/common';
 
+// Use the Joker rollup plugin to obtain the object we require
 import * as testSchema from '#schemas/test';
 
 
@@ -89,15 +93,10 @@ To use these utilities, you must install the required peer dependencies into
 your own project's `devDependencies` if you have not already done so.
 
 ```sh
-pnpm add -D @odatnurd/d1-query @axel669/aegis miniflare fs-jetpack
+pnpm add -D @axel669/aegis @axel669/joker @odatnurd/cf-aegis miniflare
 ```
 
-> ℹ️ If you are actively using
-> [@odatnurd/d1-query](https://www.npmjs.com/package/@odatnurd/d1-query) in your
-> project, that library should be installed as a regular `dependency` and not a
-> `devDependency`
-
-The `@odatnurd/cf-requests` module exports the following functions:
+The `@odatnurd/cf-requests/aegis` module exports the following functions:
 
 
 ### Helper Functions

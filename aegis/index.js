@@ -8,6 +8,45 @@ import { validate } from '../lib/handlers.js';
 /******************************************************************************/
 
 
+/* A mapping of all of the common status errors that might be returned by the
+ * validator. */
+const STATUS_TEXT = {
+  400: 'Bad Request',
+  401: 'Unauthorized',
+  402: 'Payment Required',
+  403: 'Forbidden',
+  404: 'Not Found',
+  405: 'Method Not Allowed',
+  406: 'Not Acceptable',
+  407: 'Proxy Authentication Required',
+  408: 'Request Timeout',
+  409: 'Conflict',
+  410: 'Gone',
+  411: 'Length Required',
+  412: 'Precondition Failed',
+  413: 'Payload Too Large',
+  414: 'URI Too Long',
+  415: 'Unsupported Media Type',
+  416: 'Range Not Satisfiable',
+  417: 'Expectation Failed',
+  418: "I'm a teapot",
+  421: 'Misdirected Request',
+  422: 'Unprocessable Entity',
+  423: 'Locked',
+  424: 'Failed Dependency',
+  425: 'Too Early',
+  426: 'Upgrade Required',
+  428: 'Precondition Required',
+  429: 'Too Many Requests',
+  431: 'Request Header Fields Too Large',
+  451: 'Unavailable For Legal Reasons',
+  500: 'Internal Server Error',
+};
+
+
+/******************************************************************************/
+
+
 /*
  * Initializes some custom Aegis checks that make testing of schema and data
  * requests easier.
@@ -46,126 +85,116 @@ export function initializeRequestChecks() {
  * within it. */
 export async function schemaTest(dataType, schema, data, validator) {
   // If a validator is provided, use it; otherwise use ours. This requires that
-  // you provide a call-compatible validator. This is here only to support some
-  // migrations of old code that is using a different validator than the one
-  // this library currently uses.
+  // you provide a call-compatible validator. This is here primarily to support
+  // some migrations of old code that is using a different validator than the
+  // one this library currently uses.
   validator = validator ??= validate;
 
   // Use the Hono factory to create our middleware, just as a caller would.
-  // Create a middleware using the Hono factory method for this, using the
-  // schema object and data type provided.
   const middleware = validator(dataType, schema);
 
-  // As a result of the middleware, we will either capture the validated (and
-  // masked) input JSON data, or we will capture an error response. As a part of
-  // this we also capture what the eventual status of the call would be if this
-  // generates a response, so that we can put it into the response object.
+  // A successful test captures the validated and masked JSON output, while a
+  // failed test generates a failure JSON response and has a specific status
+  // as a result of the validator's call to fail().
   let validData = null;
   let errorResponse = null;
   let responseStatus = 200;
 
-  // A fake next to pass to the middleware when we execute it, so that it does
-  // not throw an error.
-  const next = () => {};
-
-  // For form data, we need to create a single, shared request object *before*
-  // we build the context, so that both the header and the body can be derived
-  // from the same source, ensuring the multipart boundary matches.
-  let tempRequest = null;
+  // In order to handle formdata, cookie, and header validation we need a
+  // request object to put into the context. These portions are parsed out of
+  // the response by the validator and thus can't be backfilled. This also
+  // ensures that for formData we get a proper form encoded body.
+  const options = { method: 'POST' };
   if (dataType === 'form') {
-    const formData = new FormData();
-    for (const key in data) {
-      formData.append(key, data[key]);
-    }
-    tempRequest = new Request('http://localhost', {
-      method: 'POST',
-      body: formData,
-    });
+    // For form data, turn the passed in object into FormData and add it to
+    // the body.
+    options.body  = new FormData();
+    Object.entries(data).forEach(([k, v]) => options.body.append(k, v));
+
+  } else if (dataType === 'cookie') {
+    // If we are testing cookies, we need a cookie header
+    options.headers = { 'Cookie': Object.entries(data).map(([k,v]) => `${k}=${v}`).join('; ') }
+
+  } else if (dataType === 'header') {
+    // If we are testing a header, we need actual headers.
+    options.headers = data;
   }
 
+  // Create the response now.
+  const rawRequest = new Request('http://localhost/', options)
 
-  // In order to run the test we need to create a fake Hono context object to
-  // pass to the middleware; this mimics the smallest possible footprint of
-  // Hono context for our purposes.
+  // Construct a mock Hono context object to pass to the middleware. We have
+  // here a mix of functions that the validator will call to get data that Hono
+  // has already processed or should process, such as the JSON body or the
+  // mapped request URI paramters, as well as a raw Request object for things
+  // that Hono does not tend to parse, such as form data and headers.
   const ctx = {
     req: {
-      // These methods are used by the validator to pull the parsed data out of
-      // the request in order to validate it, except for when the data type is
-      // header, in which case it invokes the header() function with no name.
+      // The raw request; used by form data, headers, and cookies.
+      raw: rawRequest,
+
+      // These methods in the context convey information that Hono parses as a
+      // part of its request handling; as such we can return the data back
+      // directly.
       param: () => data,
       json: async () => data,
-      query: (key) => data[key],
-      queries: (key) => {
-        const result = {};
-        for(const [k, v] of Object.entries(data)) {
-          result[k] = Array.isArray(v) ? v : [v];
-        }
-        return key ? result[key] : result;
-      },
-      cookie: () => data,
-      formData: async () => {
-        if (dataType === 'form') {
-           return tempRequest.formData();
-        }
-        // Fallback for other types, though not strictly needed by the validator
-        const formData = new FormData();
-        for (const key in data) {
-          formData.append(key, data[key]);
-        }
-        return formData;
-      },
-      // For form data, the validator expects to be able to get the raw body
-      // as an ArrayBuffer. We can simulate this by URL-encoding the data.
-      arrayBuffer: async () => tempRequest ? tempRequest.arrayBuffer() : new ArrayBuffer(0),
-      // The validator also uses a bodyCache property to store parsed bodies.
+
+      // Query paramters must always return the value of a key as an array
+      // since they can appear more than once; also, if you provide no key, you
+      // get them all. We're precomputing here for no good reason.
+      queries: (() => {
+        const result = Object.entries(data).reduce((acc, [key, value]) => {
+          acc[key] = Array.isArray(value) ? value : [value];
+          return acc;
+        }, {});
+
+        return key => key ? result[key] : result;
+      })(),
+
+      // For form data, the validator expects to be able to get at the raw body
+      // and a place to cache the parsed body data.
+      arrayBuffer: async () => rawRequest.arrayBuffer(),
       bodyCache: {},
 
-
-      // We need to populate an actual cookie header in headers for it the
-      // validator to be able to pull cookie data because it wants to parse it
-      // itself.
-      headers: new Headers(dataType === 'cookie'
-        ? { 'Cookie': Object.entries(data).map(([k,v]) => `${k}=${v}`).join('; ') }
-        : {}),
-
-      // The validator invokes this to get headers out of the request when the
-      // data type is JSON.
-      header: (name) => {
-        // If there is no name, return the data back directly; this call pattern
-        // happens when the data type is header.
+      // The context supports gathering either a single header by name, or all
+      // headers (by passing undefined as a name.
+      header: name => {
         if (name === undefined) {
           return data;
         }
 
         return name.toLowerCase() !== 'content-type' ? undefined : {
           json: 'application/json',
-          form: tempRequest?.headers.get('Content-Type'),
+          form: rawRequest.headers.get('Content-Type'),
         }[dataType];
       },
 
-      // When validation succeeds, it invokes this to store the data back into
-      // the context.
+      // The validator invokes this to store the validated data back to the
+      // context; here we just capture it as the validated data for later
+      // return.
       addValidatedData: (target, data) => validData = data
     },
 
-    // Used to capture a failure; the validator will invoke status to set the
-    // required HTTP response and then invoke the json() method to populate the
-    // error.
-    status: (inStatus) => { responseStatus = inStatus; },
-    json: (payload) => {
+    // If a failure occurs, the validator should call fail(), which invokes
+    // thee two endpoints to place an error status and JSON payload into the
+    // response. Here we just create an actual response object, since that is
+    // what the middleware would return.
+    status: status => responseStatus = status,
+    json: payload => {
       errorResponse = new Response(
         JSON.stringify(payload), {
           status: responseStatus,
-          statusText: "Bad Request",
+          statusText: STATUS_TEXT[responseStatus] ?? 'Unknown Error',
           headers: { "Content-Type": "application/json" }
         }
       );
     },
   };
 
+  // Execute the middleware with an empty next().
   // Run the middleware; we either capture a result in the error payload or the
   // validation result.
-  await middleware(ctx, next);
+  await middleware(ctx, () => {});
 
   // Return the error payload if validation failed, otherwise return the
   // validated data from the success path.

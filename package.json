@@ -17,7 +17,7 @@
     "./aegis": "./aegis/index.js"
   },
   "scripts": {
-    "test": "echo \"No tests specified\" && exit 0"
+    "test": "aegis test/aegis.config.js"
   },
   "files": [
     "lib",
@@ -29,11 +29,38 @@
     "routing",
     "aegis"
   ],
+  "devDependencies": {
+    "@axel669/aegis": "^0.3.1",
+    "@axel669/joker": "^0.3.5",
+    "@odatnurd/cf-aegis": "^0.1.2",
+    "miniflare": "^4.20250813.0"
+  },
   "peerDependencies": {
-    "hono": "^4.7.0"
+    "@axel669/aegis": "^0.3.1",
+    "@axel669/joker": "^0.3.5",
+    "@odatnurd/cf-aegis": "^0.1.2",
+    "hono": "^4.7.0",
+    "miniflare": "^4.20250813.0"
+  },
+  "peerDependenciesMeta": {
+    "@axel669/aegis": {
+      "optional": true
+    },
+    "@axel669/joker": {
+      "optional": true
+    },
+    "@odatnurd/cf-aegis": {
+      "optional": true
+    },
+    "miniflare": {
+      "optional": true
+    }
   },
   "packageManager": "pnpm@10.15.1",
   "pnpm": {
-    "onlyBuiltDependencies": []
+    "onlyBuiltDependencies": [
+      "sharp",
+      "workerd"
+    ]
   }
 }
