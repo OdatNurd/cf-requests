@@ -74,17 +74,30 @@ export async function schemaTest(dataType, schema, data, validator) {
   const ctx = {
     req: {
       // These methods are used by the validator to pull the parsed data out of
-      // the request in order to validate it.
+      // the request in order to validate it, except for when the data type is
+      // header, in which case it invokes the header() function with no name.
       param: () => data,
       json: async () => data,
       query: () => data,
-      header: () => data,
       cookie: () => data,
-      form: async () => data,
+      formData: async () => data,
+
+      // We need to populate an actual cookie header in headers for it the
+      // validator to be able to pull cookie data because it wants to parse it
+      // itself.
+      headers: new Headers(dataType === 'cookie'
+        ? { 'Cookie': Object.entries(data).map(([k,v]) => `${k}=${v}`).join('; ') }
+        : {}),
 
       // The validator invokes this to get headers out of the request when the
       // data type is JSON.
       header: (name) => {
+        // If there is no name, return the data back directly; this call pattern
+        // happens when the data type is header.
+        if (name === undefined) {
+          return data;
+        }
+
         return name.toLowerCase() !== 'content-type' ? undefined : {
           json: 'application/json',
           form: 'multipart/form-data',
