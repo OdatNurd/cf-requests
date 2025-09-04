@@ -68,6 +68,22 @@ export async function schemaTest(dataType, schema, data, validator) {
   // not throw an error.
   const next = () => {};
 
+  // For form data, we need to create a single, shared request object *before*
+  // we build the context, so that both the header and the body can be derived
+  // from the same source, ensuring the multipart boundary matches.
+  let tempRequest = null;
+  if (dataType === 'form') {
+    const formData = new FormData();
+    for (const key in data) {
+      formData.append(key, data[key]);
+    }
+    tempRequest = new Request('http://localhost', {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
+
   // In order to run the test we need to create a fake Hono context object to
   // pass to the middleware; this mimics the smallest possible footprint of
   // Hono context for our purposes.
@@ -78,9 +94,32 @@ export async function schemaTest(dataType, schema, data, validator) {
       // header, in which case it invokes the header() function with no name.
       param: () => data,
       json: async () => data,
-      query: () => data,
+      query: (key) => data[key],
+      queries: (key) => {
+        const result = {};
+        for(const [k, v] of Object.entries(data)) {
+          result[k] = Array.isArray(v) ? v : [v];
+        }
+        return key ? result[key] : result;
+      },
       cookie: () => data,
-      formData: async () => data,
+      formData: async () => {
+        if (dataType === 'form') {
+           return tempRequest.formData();
+        }
+        // Fallback for other types, though not strictly needed by the validator
+        const formData = new FormData();
+        for (const key in data) {
+          formData.append(key, data[key]);
+        }
+        return formData;
+      },
+      // For form data, the validator expects to be able to get the raw body
+      // as an ArrayBuffer. We can simulate this by URL-encoding the data.
+      arrayBuffer: async () => tempRequest ? tempRequest.arrayBuffer() : new ArrayBuffer(0),
+      // The validator also uses a bodyCache property to store parsed bodies.
+      bodyCache: {},
+
 
       // We need to populate an actual cookie header in headers for it the
       // validator to be able to pull cookie data because it wants to parse it
@@ -100,7 +139,7 @@ export async function schemaTest(dataType, schema, data, validator) {
 
         return name.toLowerCase() !== 'content-type' ? undefined : {
           json: 'application/json',
-          form: 'multipart/form-data',
+          form: tempRequest?.headers.get('Content-Type'),
         }[dataType];
       },
 
