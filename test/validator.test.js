@@ -1,5 +1,6 @@
 import { Collection, $check, $ } from "@axel669/aegis";
 import { schemaTest } from "../aegis/index.js";
+import { body } from '../lib/handlers.js';
 
 import joker from "@axel669/joker";
 
@@ -21,11 +22,16 @@ joker.extendTypes({
  * mask properties, and our validator is set to assume that. For our tests
  * here where we're not using the plugin, this simple helper takes a schema
  * definition and returns the appropriate object directly. */
-function wrapJoker(schemaDef) {
-  return {
-    validate: joker.validator(schemaDef),
-    mask: joker.mask(schemaDef),
+function wrapJoker(schemaDef, includeMask = true) {
+  const result = {
+    validate: joker.validator(schemaDef)
   };
+
+  if (includeMask === true) {
+    result.mask = joker.mask(schemaDef);
+  }
+
+  return result;
 }
 
 
@@ -74,6 +80,18 @@ export const CookieSchema = wrapJoker({
   }
 });
 
+export const MaskSchema = wrapJoker({
+  root: {
+    "field1": "string"
+  }
+});
+
+export const NoMaskSchema = wrapJoker({
+  root: {
+    "field1": "string"
+  }
+}, false);
+
 
 /******************************************************************************/
 
@@ -82,6 +100,24 @@ export const CookieSchema = wrapJoker({
  * wrapper for it are both working correctly for all of the types of validation
  * that Hono is capable of doing, since it involvesus faking a Hono context. */
 export default Collection`Schema Validation`({
+  "Masking": async ({ runScope: ctx }) => {
+    await $check`should mask away extra fields when mask function is present`
+      .value(schemaTest('json', MaskSchema, { field1: 'hello', field2: 'world' }))
+      .isObject()
+      .eq($.field1, 'hello')
+      .eq($.field2, undefined);
+
+    await $check`should not mask away extra fields when mask function is absent`
+      .value(schemaTest('json', NoMaskSchema, { field1: 'hello', field2: 'world' }))
+      .isObject()
+      .eq($.field1, 'hello')
+      .eq($.field2, 'world');
+  },
+
+
+  /****************************************************************************/
+
+
   "JsonSchema": async ({ runScope: ctx }) => {
     await $check`should succeed with valid required and optional json data`
       .value(schemaTest('json', JsonSchema, { userId: 123, isActive: true }))
@@ -202,6 +238,35 @@ export default Collection`Schema Validation`({
       .value(schemaTest('cookie', CookieSchema, { 'theme': 'dark' }))
       .isResponseWithStatus($, 422);
   },
+
+
+  /****************************************************************************/
+
+
+  "Exception Stack Traces": async ({ runScope: ctx }) => {
+    // A simple handler that always throws an error
+    const faultyHandler = body(async (ctx) => {
+      throw new Error("This is a test exception");
+    });
+
+    // A mock context for testing
+    const mockCtx = (env = {}) => ({
+      env,
+      json: (payload) => payload,
+      status: () => {}
+    });
+
+    await $check`should include a stack trace when env var is set`
+      .value(await faultyHandler(mockCtx({ CF_REQUESTS_STACKTRACE: 'true' })))
+      .isObject()
+      .isArray($.data)
+      .gt($.data.length, 0);
+
+    await $check`should not include a stack trace when env var is not set`
+      .value(await faultyHandler(mockCtx()))
+      .isObject()
+      .eq($.data, undefined);
+  }
 });
 
 
