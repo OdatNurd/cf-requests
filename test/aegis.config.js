@@ -20,11 +20,10 @@ initializeRequestChecks();
 export const config = {
   files: [
     "test/validator.test.js",
+    "test/handlers.test.js",
   ],
   hooks: {
-    setup: async (ctx) => {
-      await aegisSetup(ctx);
-    },
+    setup: async (ctx) => await aegisSetup(ctx),
     teardown: async (ctx) => aegisTeardown(ctx),
   },
 

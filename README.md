@@ -78,12 +78,13 @@ by the schema are present.
 ```js
 // Bring in the validation generator, the success response generator, and the
 // route handler generator.
-import { validate, success, routeHandler } from '@odatnurd/cf-requests';
+import { validate, verify, success, routeHandler } from '@odatnurd/cf-requests';
 
 // Using the Joker rollup plugin, this will result in a testSchema object with a
 // `validate()` and `mask()` function within it, which verify that the result is
 // correct and mask away any fields not defined by the schema, respectively.
-import * as testSchema from '#schemas/test';
+import * as inputSchema from '#schemas/test_input';
+import * as outputSchema from '#schemas/test_output';
 
 // The hono-file-routes package defines routes in a file by exporting `$verb`
 // as routes. Here we are using the routeHandler() generator, which constructs
@@ -93,7 +94,10 @@ import * as testSchema from '#schemas/test';
 export const $post = routeHandler(
   // Generate a validator using the standard Hono mechanism; this will ensure
   // that the JSON in the body fits the schema, and will mask extraneous fields.
-  validate('json', testSchema),
+  validate('json', inputSchema),
+
+  // Verify that the resulting object, on success, follows the provided schema,
+  verify(outputSchema),
 
   // Async functions that take a single argument are route handlers; they will
   // be automatically guarded with a try/catch block
@@ -210,7 +214,7 @@ Aegis to simplify testing database-related logic.
 ## Library Methods
 
 ```js
-export function success(ctx, message, result=[], status=200) {}
+export async function success(ctx, message, result=[], status=200) {}
 ```
 
 Generate a successful return in JSON with the given `HTTP` status code; the
@@ -227,6 +231,14 @@ status code is used to construct the JSON as well as the response object:
 
 `result` is optional and defaults to an empty array if not provided. Similarly
 `status` is option and defaults to `200` if not provided.
+
+If the `verify()` function was used to set a schema, then this function will
+validate that the `result` you provide matches the schema, and will also
+optionally mask it, if `verify()` was given a mask function.
+
+When using `verify()`, if the data in `result` does not conform to the schema,
+a `SchemaError` exception will be thrown. This is automatically handled by
+`body()`, and will result in a `fail()` response instead of a `success()`.
 
 ---
 
@@ -246,6 +258,10 @@ other meaningful result (which is the opposite of the `success` case).
 
 If `status` is not provided, it defaults to `400`, while if `result` is not
 provided, the `data` field will not be present in the result.
+
+Note that unlike `success()`, `fail()` will not honor the addition of an output
+validator via `verify()`, since it is usually expected that it will not provide
+a meaningful data result.
 
 ---
 
@@ -280,6 +296,32 @@ validation of the schema, the `fail()` method is invoked on it with a status of
 ---
 
 ```js
+export function verify({ validate, mask? }) {}
+```
+
+This function registers the provided validation/masking pair for the current
+route. This causes `success` to validate (and optionally mask) the data payload
+that you give it before finalizing the request and sending the data out.
+
+The parameter should be an object that contains a `validate` and an (optional)
+`mask` member:
+
+- `validate` takes the item to validate, and returns `true` when the data given
+  is valid. Any other return value is considered to be an error.
+- `mask` takes as an input the same item passed to `validate`, and returns a
+  masked version of the data that strips fields from the object that do not
+  appear in the schema.
+
+If `mask` is not provided, then the data will be validated but not masked.
+
+This method is intended to be used with the
+[@axel669/joker](https://www.npmjs.com/package/@axel669/joker) library (and
+in particular it's rollup plugin), though you are free to use any other
+validation schema so long as the call signatures are as defined above.
+
+---
+
+```js
 export function body(handler) {}
 ```
 
@@ -300,6 +342,12 @@ be used in the call to `fail()`; all other exceptions use a status of `500`.
 For debugging, if your worker has the  `CF_REQUESTS_STACKTRACE` environment
 variable set to either `true` or `yes`, the `fail()` response will include in
 its data field the stack trace as an array of strings that represent the trace.
+
+> ℹ️ If the body catches a `SchemaError`, the `CF_REQUESTS_STACKTRACE` variable
+> will be ignored since in this case it is the data and not the code that was at
+> fail. In these cases, the result inside of the returned body will be the
+> validation error object instead.
+
 
 ```js
 export const $post = [
@@ -333,6 +381,17 @@ will use the status provided here as the `HTTP` status of the return.
 
 If `status` is not provided, it defaults to `500`, making this class generate an
 error with the same layout as any other exception class.
+
+---
+
+```js
+export class SchemaError extends HttpError { constructor(message, status=500, result=undefined) {} }
+```
+
+This is a simple extension to HttpError and is thrown in cases where a schema
+validation error has occurred; it is handled by `body()` the same as `HttpError`
+is. If the exception has a `result`, it will be used in the call to `fail()` in
+this case, so that the result of the validation will be returned.
 
 ---
 
