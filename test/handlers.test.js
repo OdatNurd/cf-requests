@@ -1,5 +1,5 @@
 import { Collection, $check, $ } from "@axel669/aegis";
-import { success, fail, verify, SchemaError, body } from '../lib/handlers.js';
+import { success, fail, validate, SchemaError, body } from '../lib/handlers.js';
 
 import joker from "@axel669/joker";
 
@@ -69,7 +69,8 @@ export const UserSchema = wrapJoker({
 
 /* This collection verifies the behavior of the unified response handlers,
  * ensuring that success and failure responses are formatted correctly and that
- * the verify() middleware correctly enforces output schemas when present. */
+ * the validate('result') middleware correctly enforces output schemas when
+ * present. */
 export default Collection`Response Handlers`({
   "Success Responses": async () => {
     const ctx = mockCtx();
@@ -126,9 +127,9 @@ export default Collection`Response Handlers`({
 
     // Manually run the verify middleware to inject the validator into the
     // context for the below tests.
-    await verify(UserSchema)(ctx, async () => {});
+    await validate('result', UserSchema)(ctx, async () => {});
 
-    await $check`verify() middleware correctly sets the validator in context`
+    await $check`validate('result') middleware correctly sets the validator in context`
       .value(ctx.get('__cf_requests_response_validator'))
       .isObject($);
 
@@ -175,7 +176,7 @@ export default Collection`Response Handlers`({
 
     // Manually run the verify middleware to inject the validator into the
     // context for the below tests.
-    await verify(UserSchema)(ctx, async () => {});
+    await validate('result', UserSchema)(ctx, async () => {});
 
     // Create a handler using body() that will trigger a schema error by passing
     // invalid data to the call to success().

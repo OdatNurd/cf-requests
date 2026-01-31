@@ -38,7 +38,7 @@ npm install @odatnurd/cf-requests
 The library provides all of the pieces needed to:
 
 - validate incoming requests based on a schema (applied to the `json` body, path
-  parameters, query parameters, etc).
+  parameters, query parameters, result body, etc). In a
 - return a consistently structured `json` result in both `success` and `failure`
   conditions
 - wrap a request handler with exception handling to remove boilerplate and help
@@ -54,8 +54,9 @@ used to implement schema validation, and that routes are defined via the
 [@axel669/hono-file-routes](https://www.npmjs.com/package/@axel669/hono-file-routes)
 package.
 
-The contents of the `test.joker.json` file looks like the following, defining
-that the body of the request contain `key1` and `key2`, each of specific types:
+The contents of the `test_input.joker.json` file looks like the following,
+defining that the body of the request contain `key1` and `key2`, each of
+specific types:
 
 ```json
 {
@@ -67,22 +68,41 @@ that the body of the request contain `key1` and `key2`, each of specific types:
 }
 ```
 
-Given this, the following is a minimal route handler that validates the JSON
-body against the schema.
+Similarly, the contents of `test_output.joker.json` looks like the following,
+which describes what the result of the request should look like:
 
-The request will result in a `422 Unprocessible Entity` error if the data is
-not valid, and the JSON body is masked to ensure that only the fields declared
-by the schema are present.
+```json
+{
+  "itemName": "result",
+  "root": {
+    "success": "bool",
+    "status": "number",
+    "data": {
+      "key1": "number",
+      "key2": "string",
+    }
+  }
+}
+```
+
+Given this, the following is a minimal route handler that validates the JSON
+body against the schema and verifies that the response being sent out is as
+expected.
+
+The request will result in a `422 Unprocessible Entity` error if the input data
+is not valid, a `500 Internal Server Error` if the response body is not valid,
+and the JSON body is masked to ensure that only the fields declared by the
+schema are present if all goes well.
 
 
 ```js
 // Bring in the validation generator, the success response generator, and the
 // route handler generator.
-import { validate, verify, success, routeHandler } from '@odatnurd/cf-requests';
+import { validate, success, routeHandler } from '@odatnurd/cf-requests';
 
-// Using the Joker rollup plugin, this will result in a testSchema object with a
-// `validate()` and `mask()` function within it, which verify that the result is
-// correct and mask away any fields not defined by the schema, respectively.
+// Using the Joker rollup plugin, this will result in a objects with a
+// `validate()` and `mask()` function within them, which verify that the result
+// is correct and mask away any fields not defined by the schema, respectively.
 import * as inputSchema from '#schemas/test_input';
 import * as outputSchema from '#schemas/test_output';
 
@@ -92,12 +112,13 @@ import * as outputSchema from '#schemas/test_output';
 //
 // This value could also be used in a standard Hono app.
 export const $post = routeHandler(
-  // Generate a validator using the standard Hono mechanism; this will ensure
-  // that the JSON in the body fits the schema, and will mask extraneous fields.
+  // Generate a validator that verifies the body of the request is json that
+  // matches the schema; results in a 422 error otherwise.
   validate('json', inputSchema),
 
-  // Verify that the resulting object, on success, follows the provided schema,
-  verify(outputSchema),
+  // Generator a validator that verifies that the result being sent back to the
+  // client matches the schema; results in a 500 error otherwise.
+  validate('result', outputSchema),
 
   // Async functions that take a single argument are route handlers; they will
   // be automatically guarded with a try/catch block
@@ -232,12 +253,12 @@ status code is used to construct the JSON as well as the response object:
 `result` is optional and defaults to an empty array if not provided. Similarly
 `status` is option and defaults to `200` if not provided.
 
-If the `verify()` function was used to set a schema, then this function will
-validate that the **entire returned body, including `result`** you provide
-matches the schema, and will also optionally mask it, if `verify()` was given
-a mask function.
+If the `validate('result')` function was used to set a middleware to validate
+the result of the request handler, then this function will validate that the
+**entire returned body, including `result`** you provide matches the schema,
+and will also optionally mask it, if a mask function was also provided.
 
-When using `verify()`, if the result body does not conform to the schema, a
+In such a case, if the result body does not conform to the schema, a
 `SchemaError` exception will be thrown. This is automatically handled by
 `body()`, and will result in a `fail()` response instead of a `success()`.
 
@@ -261,8 +282,8 @@ If `status` is not provided, it defaults to `400`, while if `result` is not
 provided, the `data` field will not be present in the result.
 
 Note that unlike `success()`, `fail()` will not honor the addition of an output
-validator via `verify()`, since it is usually expected that it will not provide
-a meaningful data result.
+validator via `validate('result')` on the result, since it is usually expected
+that it will not provide a meaningful data result to an error response.
 
 ---
 
@@ -272,7 +293,9 @@ export function validate(dataType, { validate, mask? }) {}
 
 This function uses the [Hono validator()](https://hono.dev/docs/guides/validation)
 function to create a validator that will validate the data of the provided type
-using the provided validation object.
+using the provided validation object. In addition `'result'` is also valid, and
+specifies that the validator should verify that the result of a call to
+`success()` from within the route handler.
 
 The second parameter should be an object that contains a `validate` and an
 (optional) `mask` member:
@@ -290,39 +313,11 @@ This method is intended to be used with the
 in particular it's rollup plugin), though you are free to use any other
 validation schema so long as the call signatures are as defined above.
 
-On success, the data is placed in the context. If the data does not pass the
-validation of the schema, the `fail()` method is invoked on it with a status of
-`422` to signify the issue directly.
+On success, input data is placed into the context to be retrieved by the handler
+or to be validated via `success()`, depending on the value of `dataType`.
 
----
-
-```js
-export function verify({ validate, mask? }) {}
-```
-
-This function registers the provided validation/masking pair for the current
-route. This causes `success` to validate (and optionally mask) the resulting
-message body before finalizing the request and sending the data out.
-
-> ℹ️ The schema is run over the **entire returned body, not just the`result`**,
-> so in practice the schema needs to match what the `success()` function uses
-> as the final result.
-
-The parameter should be an object that contains a `validate` and an (optional)
-`mask` member:
-
-- `validate` takes the item to validate, and returns `true` when the data given
-  is valid. Any other return value is considered to be an error.
-- `mask` takes as an input the same item passed to `validate`, and returns a
-  masked version of the data that strips fields from the object that do not
-  appear in the schema.
-
-If `mask` is not provided, then the data will be validated but not masked.
-
-This method is intended to be used with the
-[@axel669/joker](https://www.npmjs.com/package/@axel669/joker) library (and
-in particular it's rollup plugin), though you are free to use any other
-validation schema so long as the call signatures are as defined above.
+On failure, the `fail()` method is invoked, specifying the reason for the
+validation failure and a status code of either `422` (input) or `500` (output).
 
 ---
 
