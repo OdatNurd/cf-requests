@@ -233,11 +233,12 @@ status code is used to construct the JSON as well as the response object:
 `status` is option and defaults to `200` if not provided.
 
 If the `verify()` function was used to set a schema, then this function will
-validate that the `result` you provide matches the schema, and will also
-optionally mask it, if `verify()` was given a mask function.
+validate that the **entire returned body, including `result`** you provide
+matches the schema, and will also optionally mask it, if `verify()` was given
+a mask function.
 
-When using `verify()`, if the data in `result` does not conform to the schema,
-a `SchemaError` exception will be thrown. This is automatically handled by
+When using `verify()`, if the result body does not conform to the schema, a
+`SchemaError` exception will be thrown. This is automatically handled by
 `body()`, and will result in a `fail()` response instead of a `success()`.
 
 ---
@@ -300,8 +301,12 @@ export function verify({ validate, mask? }) {}
 ```
 
 This function registers the provided validation/masking pair for the current
-route. This causes `success` to validate (and optionally mask) the data payload
-that you give it before finalizing the request and sending the data out.
+route. This causes `success` to validate (and optionally mask) the resulting
+message body before finalizing the request and sending the data out.
+
+> ℹ️ The schema is run over the **entire returned body, not just the`result`**,
+> so in practice the schema needs to match what the `success()` function uses
+> as the final result.
 
 The parameter should be an object that contains a `validate` and an (optional)
 `mask` member:

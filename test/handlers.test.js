@@ -52,9 +52,14 @@ const mockCtx = (env = {}) => {
 
 export const UserSchema = wrapJoker({
   root: {
-    id: "number",
-    username: "string",
-    "?email": "string"
+    "success": "bool",
+    "status": "number",
+    "message": "string",
+    "data": {
+      id: "number",
+      username: "string",
+      "?email": "string"
+    }
   }
 });
 
@@ -158,7 +163,7 @@ export default Collection`Response Handlers`({
     // Verify that the error result contains specific validation details
     await $check`SchemaError contains validation details`
       .value(error.result[0])
-      .eq($.message, "item.id is not a number");
+      .eq($.message, "item.data.id is not a number");
   },
 
 
@@ -187,7 +192,7 @@ export default Collection`Response Handlers`({
       .eq($.success, false)
       .eq($.status, 500)
       .isArray($.data)
-      .eq($.data[0].message, "item.id is not a number");
+      .eq($.data[0].message, "item.data.id is not a number");
 
     // Create a manual handler that double checks that throwing the exception
     // directly when outside of the body handler still gives the correct result.
