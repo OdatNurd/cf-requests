@@ -192,19 +192,19 @@ export default Collection`Response Handlers`({
       .eq($.success, false)
       .eq($.status, 500)
       .isArray($.data)
-      .eq($.data[0].message, "item.data.id is not a number");
+      .eq($.data[0], "item.data.id is not a number (got 'not-number')");
 
     // Create a manual handler that double checks that throwing the exception
     // directly when outside of the body handler still gives the correct result.
     const manualHandler = body(async (c) => {
-       throw new SchemaError("Manual Fail", 422, [{ message: "manual" }]);
+       throw new SchemaError("Manual Fail", 422, [{ message: "manual", value: "undefined" }]);
     });
 
     await $check`body() catches manual SchemaError with custom status`
      .value(await manualHandler(ctx))
      .eq($.success, false)
      .eq($.status, 422)
-     .eq($.data[0].message, "manual");
+     .eq($.data[0], "manual (got 'undefined')");
   }
 });
 
