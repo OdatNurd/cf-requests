@@ -7,7 +7,8 @@ requests in a
 [Hono](https://hono.dev/) as a route handler.
 
 The focus is to allow for more easy creation of robust `API` routes, providing
-a standard `JSON` response format on both success and failure.
+a standard `JSON` response format on both success and failure, although it is
+possible to use it for ad-hoc `JSON` responses as well, as desired.
 
 The request validation functionality is intended to be used alongside the
 [@axel669/joker](https://www.npmjs.com/package/@axel669/joker) schema
@@ -251,16 +252,33 @@ status code is used to construct the JSON as well as the response object:
 ```
 
 `result` is optional and defaults to an empty array if not provided. Similarly
-`status` is option and defaults to `200` if not provided.
+`status` is optional and defaults to `200` if not provided.
 
 If the `validate('result')` function was used to set a middleware to validate
 the result of the request handler, then this function will validate that the
 **entire returned body, including `result`** you provide matches the schema,
-and will also optionally mask it, if a mask function was also provided.
+and will also optionally mask it, if a mask function was also provided. This is
+done as per the status code used (see the `validate()` function below for
+details).
 
 In such a case, if the result body does not conform to the schema, a
 `SchemaError` exception will be thrown. This is automatically handled by
 `body()`, and will result in a `fail()` response instead of a `success()`.
+
+---
+
+
+```js
+export async function json(ctx, result=[], status=200) {}
+```
+
+This function operates the same as `success()` does, with the exception that
+instead of conforming the outgoing `JSON` to a specific format, the value of
+`result` is used as the direct body to be sent out.
+
+As with `success()`, the `validate()` function can be used to set up a
+`'result'` middleware which will cause this `JSON` to be validated and possibly
+masked prior to return.
 
 ---
 
@@ -318,6 +336,22 @@ or to be validated via `success()`, depending on the value of `dataType`.
 
 On failure, the `fail()` method is invoked, specifying the reason for the
 validation failure and a status code of either `422` (input) or `500` (output).
+
+In the specific case of the `'result'` validation type, the incoming validation
+object can be an object with keys that are `HTTP` status codes and values that
+are objects which contain the validator/masker for a result when that status
+code is used, which allows for using a different schema for different types of
+results.
+
+When operating this way, the key `'default'` specifies the schema to use for any
+status which does not have a specific schema defined.
+
+This means that, for the `'result'` validation type, these two calls will
+produce the same result:
+```
+validate('result', { validate, mask});
+validate('result', { default: { validate, mask } });
+```
 
 ---
 
