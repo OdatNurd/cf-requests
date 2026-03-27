@@ -73,6 +73,45 @@ export const RawJSONSchema = wrapJoker({
 })
 
 
+// Schemas for testing status routing
+export const Status200Schema = wrapJoker({
+  root: {
+    "is_ok": "bool"
+  }
+});
+
+export const StatusDefaultSchema = wrapJoker({
+  root: {
+    "is_error": "bool",
+    "error_code": "number"
+  }
+});
+
+
+// Wrapper schemas for testing success() status routing
+export const Success200Schema = wrapJoker({
+  root: {
+    "success": "bool",
+    "status": "number",
+    "message": "string",
+    "data": {
+      "ok": "bool"
+    }
+  }
+});
+
+export const SuccessDefaultSchema = wrapJoker({
+  root: {
+    "success": "bool",
+    "status": "number",
+    "message": "string",
+    "data": {
+      "fallback": "bool"
+    }
+  }
+});
+
+
 /******************************************************************************/
 
 
@@ -263,6 +302,62 @@ export default Collection`Response Handlers`({
       .instanceof($, SchemaError)
       .eq($.status, 500)
       .isArray($.result);
+  },
+
+
+  /****************************************************************************/
+
+
+  "Status Mapped Schemas": async () => {
+    const singleCtx = mockCtx();
+    const mapCtx = mockCtx();
+
+    // 1. Test that a single schema applies to any status code (wraps in default)
+    await validate('result', RawJSONSchema)(singleCtx, async () => {});
+
+    await $check`Single schema validates and masks a 200 status`
+      .value(await json(singleCtx, { value1: "test", value2: 1, extra: "drop" }, 200))
+      .eq($.value1, "test")
+      .eq($.extra, undefined);
+
+    await $check`Single schema validates and masks a 404 status`
+      .value(await json(singleCtx, { value1: "test404", value2: 2, extra: "drop" }, 404))
+      .eq($.value1, "test404")
+      .eq($.extra, undefined);
+
+    // 2. Test status mapping logic using json()
+    await validate('result', {
+      200: Status200Schema,
+      default: StatusDefaultSchema
+    })(mapCtx, async () => {});
+
+    await $check`json() applies the specific schema for a matching status`
+      .value(await json(mapCtx, { is_ok: true, extra: "drop" }, 200))
+      .eq($.is_ok, true)
+      .eq($.extra, undefined);
+
+    await $check`json() falls back to the default schema for a non-matching status`
+      .value(await json(mapCtx, { is_error: true, error_code: 404, extra: "drop" }, 404))
+      .eq($.is_error, true)
+      .eq($.error_code, 404)
+      .eq($.extra, undefined);
+
+    // 3. Test status mapping logic using success() envelope
+    const successMapCtx = mockCtx();
+    await validate('result', {
+      200: Success200Schema,
+      default: SuccessDefaultSchema
+    })(successMapCtx, async () => {});
+
+    await $check`success() applies the specific schema for a matching status`
+      .value(await success(successMapCtx, "OK", { ok: true, extra: "drop" }, 200))
+      .eq($.data.ok, true)
+      .eq($.data.extra, undefined);
+
+    await $check`success() falls back to the default schema for a non-matching status`
+      .value(await success(successMapCtx, "Fallback", { fallback: true, extra: "drop" }, 404))
+      .eq($.data.fallback, true)
+      .eq($.data.extra, undefined);
   }
 });
 
