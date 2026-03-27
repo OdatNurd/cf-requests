@@ -1,5 +1,5 @@
 import { Collection, $check, $ } from "@axel669/aegis";
-import { success, fail, validate, SchemaError, body } from '../lib/handlers.js';
+import { success, fail, validate, SchemaError, body, json } from '../lib/handlers.js';
 
 import joker from "@axel669/joker";
 
@@ -62,6 +62,15 @@ export const UserSchema = wrapJoker({
     }
   }
 });
+
+
+export const RawJSONSchema = wrapJoker({
+  root: {
+    "value1": "string",
+    "value2": "number",
+    "?value3": "bool"
+  }
+})
 
 
 /******************************************************************************/
@@ -206,6 +215,54 @@ export default Collection`Response Handlers`({
      .eq($.success, false)
      .eq($.status, 422)
      .eq($.data[0], "manual (got 'undefined')");
+  },
+
+
+  /****************************************************************************/
+
+
+  "Raw JSON Responses": async () => {
+    const ctx = mockCtx();
+
+    await $check`json() returns exact payload with default status`
+      .value(await json(ctx, { hello: "world" }))
+      .isObject($)
+      .eq($.hello, "world")
+      .eq($._httpStatus, 200);
+
+    await $check`json() respects provided status`
+      .value(await json(ctx, { created: true }, 201))
+      .eq($.created, true)
+      .eq($._httpStatus, 201);
+
+    // Manually run the verify middleware to inject the RawJSONSchema validator
+    await validate('result', RawJSONSchema)(ctx, async () => {});
+
+    const originalData = {
+      value1: "test_string",
+      value2: 42,
+      extra_field: "SHOULD_BE_MASKED"
+    };
+
+    await $check`json() validates and masks data when verification is active`
+      .value(await json(ctx, originalData))
+      .eq($.value1, "test_string")
+      .eq($.value2, 42)
+      .eq($.extra_field, undefined);
+
+    // Test that invalid data throws the correct SchemaError
+    let error = null;
+    try {
+      await json(ctx, { value1: 100, value2: "string_instead_of_number" });
+    } catch (exception) {
+      error = exception;
+    }
+
+    await $check`json() throws SchemaError when data does not match schema`
+      .value(error)
+      .instanceof($, SchemaError)
+      .eq($.status, 500)
+      .isArray($.result);
   }
 });
 
