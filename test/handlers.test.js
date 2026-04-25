@@ -1,7 +1,7 @@
 import { Collection, $check, $ } from "@axel669/aegis";
 import { success, fail, validate, SchemaError, body, json } from '../lib/handlers.js';
 
-import joker from "@axel669/joker";
+import * as joker from "@axel669/joker";
 
 
 /******************************************************************************/

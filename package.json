@@ -31,11 +31,11 @@
   ],
   "devDependencies": {
     "@axel669/aegis": "^0.3.1",
-    "@axel669/joker": "^0.3.5",
-    "@odatnurd/cf-aegis": "^0.1.4",
+    "@axel669/joker": "^0.3.6",
+    "@odatnurd/cf-aegis": "^0.1.9",
     "json5": "^2.2.3",
-    "miniflare": "^4.20250923.0",
-    "smol-toml": "^1.4.2"
+    "miniflare": "^4.20260424.0",
+    "smol-toml": "^1.6.1"
   },
   "peerDependencies": {
     "@axel669/aegis": "^0.3.1",

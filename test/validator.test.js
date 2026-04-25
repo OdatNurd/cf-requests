@@ -2,7 +2,7 @@ import { Collection, $check, $ } from "@axel669/aegis";
 import { schemaTest } from "../aegis/index.js";
 import { body } from '../lib/handlers.js';
 
-import joker from "@axel669/joker";
+import * as joker from "@axel669/joker";
 
 
 /******************************************************************************/
