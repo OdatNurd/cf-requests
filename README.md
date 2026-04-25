@@ -97,39 +97,45 @@ schema are present if all goes well.
 
 
 ```js
-// Bring in the validation generator, the success response generator, and the
-// route handler generator.
-import { validate, success, routeHandler } from '@odatnurd/cf-requests';
+// Bring in the validation generator, the success response generator,
+// and the route handler generator.
+import {
+  validate,
+  success,
+  routeHandler
+} from '@odatnurd/cf-requests';
 
 // Using the Joker rollup plugin, this will result in a objects with a
-// `validate()` and `mask()` function within them, which verify that the result
-// is correct and mask away any fields not defined by the schema, respectively.
+// `validate()` and `mask()` function within them, which verify that
+// the result is correct and mask away any fields not defined by the
+// schema, respectively.
 import * as inputSchema from '#schemas/test_input';
 import * as outputSchema from '#schemas/test_output';
 
-// The hono-file-routes package defines routes in a file by exporting `$verb`
-// as routes. Here we are using the routeHandler() generator, which constructs
-// an appropriate route array based on its arguments.
+// The hono-file-routes package defines routes in a file by exporting
+// `$verb` as routes. Here we are using the routeHandler() generator,
+// which constructs an appropriate route array based on its arguments.
 //
 // This value could also be used in a standard Hono app.
 export const $post = routeHandler(
-  // Generate a validator that verifies the body of the request is json that
-  // matches the schema; results in a 422 error otherwise.
+  // Generate a validator that verifies the body of the request is
+  // json that matches the schema; results in a 422 error otherwise.
   validate('json', inputSchema),
 
-  // Generator a validator that verifies that the result being sent back to the
-  // client matches the schema; results in a 500 error otherwise.
+  // Generator a validator that verifies that the result being sent
+  // back to the client matches the schema; results in a 500 error
+  // otherwise.
   validate('result', outputSchema),
 
-  // Async functions that take a single argument are route handlers; they will
-  // be automatically guarded with a try/catch block
+  // Async functions that take a single argument are route handlers;
+  // they will be automatically guarded with a try/catch block
   async (ctx) => {
     // PUll out the validated JSON body.
     const body = ctx.req.valid('json');
 
-    // Thrown exceptions inside the handler cause a fail() call to occur; the
-    // status is 500 for generic errors, but you can throw HTTPError instances
-    // to get a specific result as desired.
+    // Thrown exceptions inside the handler cause a fail() call to
+    // occur; the status is 500 for generic errors, but you can throw
+    // HTTPError instances to get a specific result as desired.
     if (body.key1 != 69) {
       throw new Error('key is not nice');
     }
@@ -170,7 +176,8 @@ called once at the top of your `aegis.config.js` file.
 ---
 
 ```javascript
-export async function schemaTest(dataType, schema, data, validator = undefined) {}
+export async function schemaTest(dataType, schema, data,
+                                 validator = undefined) {}
 ```
 Takes a `dataType` and `schema` as would be provided to the `validate` function
 and runs the validation against `data` to see what the result is. The function
@@ -198,7 +205,11 @@ the database first in order to set up testing.
 **Example `aegis.config.js`:**
 
 ```js
-import { initializeCustomChecks, aegisSetup, aegisTeardown } from '@odatnurd/cf-aegis';
+import {
+  initializeCustomChecks,
+  aegisSetup,
+  aegisTeardown
+} from '@odatnurd/cf-aegis';
 import { initializeRequestChecks } from '@odatnurd/cf-requests/aegis';
 
 initializeCustomChecks();
@@ -405,7 +416,9 @@ export const $post = [
 ---
 
 ```js
-export class HttpError extends Error { constructor(message, status=500) {} }
+export class HttpError extends Error {
+  constructor(message, status=500) {}
+}
 ```
 
 This is a simple exception class that wraps a textual message and a status code.
@@ -419,7 +432,9 @@ error with the same layout as any other exception class.
 ---
 
 ```js
-export class SchemaError extends HttpError { constructor(message, status=500, result=undefined) {} }
+export class SchemaError extends HttpError {
+  constructor(message, status=500, result=undefined) {}
+}
 ```
 
 This is a simple extension to HttpError and is thrown in cases where a schema
@@ -444,15 +459,15 @@ cleaner looking, while still allowing for arbitrary middleware
 export const $post = routeHandler(
   validate('json', testSchema),
 
-  // More than one argument, so function is directly returned; no body() call
-  // wrapper here.
+  // More than one argument, so function is directly returned; no
+  // body() call wrapper here.
   async (ctx, next) => {
     console.log('Async middleware is running!');
     await next();
   },
 
-  // Single argument async functions are wrapped in body(), so exceptions raised
-  // are handled consistently.
+  // Single argument async functions are wrapped in body(), so
+  // exceptions raised are handled consistently.
   async (ctx) => {
     const body = ctx.req.valid('json');
 
