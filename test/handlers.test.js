@@ -39,6 +39,7 @@ const mockCtx = (env = {}) => {
 
     // Emulate response helpers
     status: (code) => { currentStatus = code; },
+    body: (payload, code) => ({ _body: payload, _httpStatus: code }),
     json: (payload) => payload === null ? null : ({
       ...payload,
 
@@ -167,6 +168,59 @@ export default Collection`Response Handlers`({
       .eq($.status, 404)
       .eq($.data.hint, "check the ID")
       .eq($._httpStatus, 404);
+  },
+
+
+  /****************************************************************************/
+
+
+  "Status Validation": async () => {
+    const capture = async fn => {
+      try {
+        await fn();
+        return null;
+      } catch (err) {
+        return err;
+      }
+    };
+
+    await $check`success() rejects an invalid status with a clear error`
+      .value(await capture(() => success(mockCtx(), "bad", [], 199)))
+      .instanceof($, RangeError)
+      .eq($.message, "invalid HTTP status '199'; expected an integer from 200 to 599");
+
+    await $check`json() rejects a non-integer status with a clear error`
+      .value(await capture(() => json(mockCtx(), {}, 200.5)))
+      .instanceof($, RangeError)
+      .eq($.message, "invalid HTTP status '200.5'; expected an integer from 200 to 599");
+
+    await $check`fail() rejects an out-of-range status with a clear error`
+      .value(await capture(() => fail(mockCtx(), "bad", 600)))
+      .instanceof($, RangeError)
+      .eq($.message, "invalid HTTP status '600'; expected an integer from 200 to 599");
+
+    await $check`HttpError rejects an invalid status with a clear error`
+      .value(await capture(() => new HttpError("bad", 99)))
+      .instanceof($, RangeError)
+      .eq($.message, "invalid HTTP status '99'; expected an integer from 200 to 599");
+
+    const validatedCtx = mockCtx();
+    await validate('result', UserSchema)(validatedCtx, async () => {});
+
+    await $check`success() skips result validation for a bodyless status`
+      .value(await success(validatedCtx, "no content", { id: "not-a-number" }, 204))
+      .eq($._body, null)
+      .eq($._httpStatus, 204);
+
+    await $check`json() sends a null body for a bodyless status`
+      .value(await json(mockCtx(), { ignored: true }, 304))
+      .eq($._body, null)
+      .eq($._httpStatus, 304);
+
+    await $check`fail() sends a null body for a bodyless status`
+      .value(fail(mockCtx(), "reset", 205))
+      .eq($._body, null)
+      .eq($._httpStatus, 205);
   },
 
 
@@ -467,6 +521,48 @@ export default Collection`Response Handlers`({
     await $check`a real Hono request honors HTTPException statuses`
       .value(exceptionResponse.status)
       .eq($, 401);
+  },
+
+
+  /****************************************************************************/
+
+
+  "Bodyless Statuses": async () => {
+    const app = new Hono();
+
+    app.get('/no-content', body((ctx) => success(ctx, "no content", { id: 1 }, 204)));
+    app.get('/reset-content', body((ctx) => fail(ctx, "reset", 205)));
+    app.get('/not-modified', body((ctx) => json(ctx, { ignored: true }, 304)));
+
+    const noContent = await app.request('/no-content');
+
+    await $check`a real 204 response keeps its status`
+      .value(noContent.status)
+      .eq($, 204);
+
+    await $check`a real 204 response sends no content`
+      .value(await noContent.text())
+      .eq($, '');
+
+    const resetContent = await app.request('/reset-content');
+
+    await $check`a real 205 response keeps its status`
+      .value(resetContent.status)
+      .eq($, 205);
+
+    await $check`a real 205 response sends no content`
+      .value(await resetContent.text())
+      .eq($, '');
+
+    const notModified = await app.request('/not-modified');
+
+    await $check`a real 304 response keeps its status`
+      .value(notModified.status)
+      .eq($, 304);
+
+    await $check`a real 304 response sends no content`
+      .value(await notModified.text())
+      .eq($, '');
   },
 
 

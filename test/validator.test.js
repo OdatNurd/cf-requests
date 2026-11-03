@@ -278,6 +278,10 @@ export default Collection`Schema Validation`({
       }, { value1: 'hello' }, undefined, 201))
       .isObject($)
       .eq($.value1, 'hello');
+
+    await $check`should return a null response for a bodyless result status`
+      .value(await schemaTest('result', ResultSchema, { value1: 'hello' }, undefined, 204))
+      .isResponseWithStatus($, 204);
   },
 
 

@@ -214,6 +214,7 @@ export async function schemaTest(dataType, schema, data, validator, status = 200
     // response. Here we just create an actual response object, since that is
     // what the middleware would return.
     status: status => responseStatus = status,
+    body: (payload, status) => new Response(null, { status }),
     json: payload => {
       // Result tests treat json() as the success path; everything else is a
       // failure response produced by fail().
