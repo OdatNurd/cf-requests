@@ -95,10 +95,10 @@ export function initializeRequestChecks() {
  * the schema works as expected.
  *
  * The result of the call is either a JSON object that represents the validated
- * and masked input data if the schema validated the data, or a Response object
- * that carries the failure of the validation. This would be a response of code
- * 400 with a JSON body that carries the actual validation failure message
- * within it. */
+ * and masked data if the schema validated it, or a Response object that carries
+ * the failure of the validation. Input failures are a 422 response and result
+ * failures are a 500 response, each with a JSON body that carries the actual
+ * validation failure details within it. */
 export async function schemaTest(dataType, schema, data, validator, status = 200) {
   // If a validator is provided, use it; otherwise use ours. This requires that
   // you provide a call-compatible validator. This is here primarily to support
@@ -156,7 +156,7 @@ export async function schemaTest(dataType, schema, data, validator, status = 200
   // Construct a mock Hono context object to pass to the middleware. We have
   // here a mix of functions that the validator will call to get data that Hono
   // has already processed or should process, such as the JSON body or the
-  // mapped request URI paramters, as well as a raw Request object for things
+  // mapped request URI parameters, as well as a raw Request object for things
   // that Hono does not tend to parse, such as form data and headers.
   const ctx = {
     env: {},
@@ -191,7 +191,7 @@ export async function schemaTest(dataType, schema, data, validator, status = 200
       bodyCache: {},
 
       // The context supports gathering either a single header by name, or all
-      // headers (by passing undefined as a name.
+      // headers (by passing undefined as a name).
       header: name => {
         if (name === undefined) {
           return data;

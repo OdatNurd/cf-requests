@@ -34,12 +34,16 @@ Install `cf-requests` via `npm`, `pnpm`, and so on, in the usual way.
 npm install @odatnurd/cf-requests
 ```
 
+`hono` is a peer dependency and is installed alongside the package by npm and
+pnpm. If your package manager does not install peers automatically, install it
+explicitly.
+
 ## Usage
 
 The library provides all of the pieces needed to:
 
 - validate incoming requests based on a schema (applied to the `json` body, path
-  parameters, query parameters, result body, etc). In a
+  parameters, query parameters, result body, etc).
 - return a consistently structured `json` result in both `success` and `failure`
   conditions
 - wrap a request handler with exception handling to remove boilerplate and help
@@ -90,7 +94,7 @@ Given this, the following is a minimal route handler that validates the JSON
 body against the schema and verifies that the response being sent out is as
 expected.
 
-The request will result in a `422 Unprocessible Entity` error if the input data
+The request will result in a `422 Unprocessable Entity` error if the input data
 is not valid, a `500 Internal Server Error` if the response body is not valid,
 and the JSON body is masked to ensure that only the fields declared by the
 schema are present if all goes well.
@@ -105,7 +109,7 @@ import {
   routeHandler
 } from '@odatnurd/cf-requests';
 
-// Using the Joker rollup plugin, this will result in a objects with a
+// Using the Joker rollup plugin, this will result in an object with a
 // `validate()` and `mask()` function within them, which verify that
 // the result is correct and mask away any fields not defined by the
 // schema, respectively.
@@ -116,7 +120,8 @@ import * as outputSchema from '#schemas/test_output';
 // `$verb` as routes. Here we are using the routeHandler() generator,
 // which constructs an appropriate route array based on its arguments.
 //
-// This value could also be used in a standard Hono app.
+// Since routeHandler() returns an array, this can also be spread into a
+// standard Hono route: app.post('/', ...$post).
 export const $post = routeHandler(
   // Generate a validator that verifies the body of the request is
   // json that matches the schema; results in a 422 error otherwise.
@@ -130,12 +135,12 @@ export const $post = routeHandler(
   // Async functions that take a single argument are route handlers;
   // they will be automatically guarded with a try/catch block
   async (ctx) => {
-    // PUll out the validated JSON body.
+    // Pull out the validated JSON body.
     const body = ctx.req.valid('json');
 
     // Thrown exceptions inside the handler cause a fail() call to
     // occur; the status is 500 for generic errors, but you can throw
-    // HTTPError instances to get a specific result as desired.
+    // HttpError instances to get a specific result as desired.
     if (body.key1 != 69) {
       throw new Error('key is not nice');
     }
@@ -154,12 +159,15 @@ test runner and the
 [@odatnurd/cf-aegis](https://www.npmjs.com/package/@odatnurd/cf-aegis) helper
 libraries.
 
-To use these utilities, you must install the required peer dependencies into
-your own project's `devDependencies` if you have not already done so.
+To use these utilities, install the optional peer dependencies used by these
+helpers into your own project's `devDependencies` if you have not already done
+so.
 
 ```sh
 pnpm add -D @axel669/aegis @axel669/joker @odatnurd/cf-aegis miniflare
 ```
+
+`hono` is a required peer and is installed with the package.
 
 The `@odatnurd/cf-requests/aegis` module exports the following functions to
 aid in setting up tests:
@@ -177,7 +185,7 @@ called once at the top of your `aegis.config.js` file.
 
 ```javascript
 export async function schemaTest(dataType, schema, data,
-                                 validator = undefined) {}
+                                 validator = undefined, status = 200) {}
 ```
 Takes a `dataType` and `schema` as would be provided to the `validate` function
 and runs the validation against `data` to see what the result is. The function
@@ -188,6 +196,11 @@ will return either:
 
 Using this, it is possible to validate that a schema works as expected without
 having to use it in the actual request first.
+
+For the `'result'` data type the payload is validated as the response body
+rather than being wrapped in the `success()` envelope, and `status` selects the
+matching schema from a status map. A failed check returns a `422` Response for
+input data and a `500` Response for result data.
 
 > ℹ️ By default, the test will use the `validate` function to perform the data
 > validation. If desired, you can pass an optional `validator` function as the
@@ -213,7 +226,7 @@ import {
 import { initializeRequestChecks } from '@odatnurd/cf-requests/aegis';
 
 initializeCustomChecks();
-initializeRequestChecks()
+initializeRequestChecks();
 
 export const config = {
     files: [
@@ -236,7 +249,7 @@ export const config = {
 ### Custom Checks
 
 The `initializeRequestChecks()` function registers several custom checks with
-Aegis to simplify testing database-related logic.
+Aegis to simplify testing request and response schemas.
 
 * `.isResponse($)`: Checks if a value is a `Response` object.
 * `.isNotResponse($)`: Checks if a value is not a `Response` object.
@@ -314,6 +327,9 @@ Note that unlike `success()`, `fail()` will not honor the addition of an output
 validator via `validate('result')` on the result, since it is usually expected
 that it will not provide a meaningful data result to an error response.
 
+`success()` and `json()` are async, while `fail()` is synchronous; await the
+first two when calling them directly.
+
 ---
 
 ```js
@@ -323,8 +339,8 @@ export function validate(dataType, { validate, mask? }) {}
 This function uses the [Hono validator()](https://hono.dev/docs/guides/validation)
 function to create a validator that will validate the data of the provided type
 using the provided validation object. In addition `'result'` is also valid, and
-specifies that the validator should verify that the result of a call to
-`success()` from within the route handler.
+specifies that the validator should verify the result of a call to `success()`
+or `json()` from within the route handler.
 
 The second parameter should be an object that contains a `validate` and an
 (optional) `mask` member:
@@ -339,14 +355,15 @@ If `mask` is not provided, then the data will be validated but not masked.
 
 This method is intended to be used with the
 [@axel669/joker](https://www.npmjs.com/package/@axel669/joker) library (and
-in particular it's rollup plugin), though you are free to use any other
+in particular its rollup plugin), though you are free to use any other
 validation schema so long as the call signatures are as defined above.
 
 On success, input data is placed into the context to be retrieved by the handler
 or to be validated via `success()`, depending on the value of `dataType`.
 
-On failure, the `fail()` method is invoked, specifying the reason for the
-validation failure and a status code of either `422` (input) or `500` (output).
+On failure, the `fail()` method is invoked with a generic message and the
+validator's errors in the `data` field, using a status code of either `422`
+(input) or `500` (output).
 
 In the specific case of the `'result'` validation type, the incoming validation
 object can be an object with keys that are `HTTP` status codes and values that
@@ -360,9 +377,13 @@ status which does not have a specific schema defined.
 This means that, for the `'result'` validation type, these two calls will
 produce the same result:
 ```
-validate('result', { validate, mask});
+validate('result', { validate, mask });
 validate('result', { default: { validate, mask } });
 ```
+
+Result validation only applies to responses produced by `success()` and
+`json()`. A handler that constructs its own `Response` or calls `ctx.json()`
+directly bypasses this middleware.
 
 ---
 
@@ -383,6 +404,9 @@ that was caught.
 
 Exceptions of type `HttpError` carry a specific `HTTP` status code, which will
 be used in the call to `fail()`; all other exceptions use a status of `500`.
+
+Hono's `HTTPException` is returned as-is, preserving its status, headers and
+body.
 
 For debugging, if your worker has the  `CF_REQUESTS_STACKTRACE` environment
 variable set to either `true` or `yes`, the `fail()` response will include in
@@ -453,7 +477,10 @@ any number of arguments and returning them back as an array.
 
 As a part of this operation, any `async` function that takes exactly one argument
 is implicitly wrapped in `body()`. This makes the resulting handler somewhat
-cleaner looking, while still allowing for arbitrary middleware
+cleaner looking, while still allowing for arbitrary middleware.
+
+The returned array can be exported directly (as in the example above) or spread
+into a standard Hono route: `app.post('/', ...routeHandler(...))`.
 
 ```js
 export const $post = routeHandler(
