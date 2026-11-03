@@ -59,18 +59,29 @@ const STATUS_TEXT = {
  * This is entirely optional.
  */
 export function initializeRequestChecks() {
+  // A Response from another realm (for example, one created by workerd in a
+  // Miniflare test) is not an instance of this realm's Response class, so fall
+  // back to the shape that all Response objects share.
+  const isResponse = source =>
+    source instanceof Response ||
+    (source !== null &&
+     typeof source === 'object' &&
+     typeof source.status === 'number' &&
+     typeof source.headers?.get === 'function' &&
+     typeof source.arrayBuffer === 'function');
+
   // Check that a value is a response object from our middleware
   addCheck.value.isResponse(
-    source => source instanceof Response
+    source => isResponse(source)
   );
 
   // Check that a value is NOT a response object
   addCheck.value.isNotResponse(
-    source => (source instanceof Response) === false
+    source => isResponse(source) === false
   );
 
   addCheck.value.isResponseWithStatus(
-    (source, status) => source instanceof Response && source.status === status
+    (source, status) => isResponse(source) && source.status === status
   );
 }
 

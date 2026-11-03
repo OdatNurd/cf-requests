@@ -284,6 +284,26 @@ export default Collection`Schema Validation`({
   /****************************************************************************/
 
 
+  "Response Checks": async ({ runScope: ctx }) => {
+    const responseLike = {
+      status: 200,
+      headers: new Headers(),
+      arrayBuffer: async () => new ArrayBuffer(0)
+    };
+
+    await $check`should accept a response-like object from another realm`
+      .value(responseLike)
+      .isResponse($);
+
+    await $check`should not accept a plain object as a response`
+      .value({ status: 200 })
+      .isNotResponse($);
+  },
+
+
+  /****************************************************************************/
+
+
   "Exception Stack Traces": async ({ runScope: ctx }) => {
     // A simple handler that always throws an error
     const faultyHandler = body(async (ctx) => {
