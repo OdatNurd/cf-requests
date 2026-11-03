@@ -7,10 +7,6 @@ settings:
 importers:
 
   .:
-    dependencies:
-      hono:
-        specifier: ^4.7.0
-        version: 4.12.15
     devDependencies:
       '@axel669/aegis':
         specifier: ^0.3.1
@@ -21,6 +17,9 @@ importers:
       '@odatnurd/cf-aegis':
         specifier: ^0.1.9
         version: 0.1.9(@axel669/aegis@0.3.1)(json5@2.2.3)(miniflare@4.20260424.0)(smol-toml@1.6.1)
+      hono:
+        specifier: 4.13.16
+        version: 4.13.16
       json5:
         specifier: ^2.2.3
         version: 2.2.3
@@ -305,8 +304,8 @@ packages:
     resolution: {integrity: sha512-AOIgSQCepiJYwP3ARnGx+5VnTu2HBYdzbGP45eLw1vr3zB3vZLeyed1sC9hnbcOc9/SrMyM5RPQrkGz4aS9Zow==}
     engines: {node: '>= 6'}
 
-  hono@4.12.15:
-    resolution: {integrity: sha512-qM0jDhFEaCBb4TxoW7f53Qrpv9RBiayUHo0S52JudprkhvpjIrGoU1mnnr29Fvd1U335ZFPZQY1wlkqgfGXyLg==}
+  hono@4.13.16:
+    resolution: {integrity: sha512-AOLOEhvrV+iH92xXCnFr/5+3KjPKcI3xP63XJtX5spAnkznPdHijlIsUTpi7/9EhWqrTCekw5c5zh1K+YsVw7A==}
     engines: {node: '>=16.9.0'}
 
   is-extglob@2.1.1:
@@ -632,7 +631,7 @@ snapshots:
     dependencies:
       is-glob: 4.0.3
 
-  hono@4.12.15: {}
+  hono@4.13.16: {}
 
   is-extglob@2.1.1: {}
 

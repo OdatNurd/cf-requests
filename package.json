@@ -33,18 +33,17 @@
     "@axel669/aegis": "^0.3.1",
     "@axel669/joker": "^0.3.6",
     "@odatnurd/cf-aegis": "^0.1.9",
+    "hono": "4.13.16",
     "json5": "^2.2.3",
     "miniflare": "^4.20260424.0",
     "smol-toml": "^1.6.1"
   },
   "peerDependencies": {
     "@axel669/aegis": "^0.3.1",
-    "@axel669/joker": "^0.3.5",
-    "@odatnurd/cf-aegis": "^0.1.4",
+    "@axel669/joker": "^0.3.6",
+    "@odatnurd/cf-aegis": "^0.1.9",
     "hono": "^4.7.0",
-    "json5": "^2.2.3",
-    "miniflare": "^4.20250923.0",
-    "smol-toml": "^1.4.2"
+    "miniflare": "^4.20260424.0"
   },
   "peerDependenciesMeta": {
     "@axel669/aegis": {
@@ -57,17 +56,8 @@
       "optional": true
     },
     "miniflare": {
-      "smol-toml": true
-    },
-    "json5": {
       "optional": true
     }
   },
-  "packageManager": "pnpm@10.17.1",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "sharp",
-      "workerd"
-    ]
-  }
+  "packageManager": "pnpm@11.6.0"
 }
