@@ -45,6 +45,12 @@ export const JsonSchema = wrapJoker({
   }
 });
 
+export const JsonDateSchema = wrapJoker({
+  root: {
+    "created": "string"
+  }
+});
+
 export const FormSchema = wrapJoker({
   root: {
     username: "string",
@@ -140,6 +146,10 @@ export default Collection`Schema Validation`({
     await $check`should fail if required json data is missing`
       .value(schemaTest('json', JsonSchema, { isActive: false }))
       .isResponseWithStatus($, 422);
+
+    await $check`should validate json data after it has been serialized`
+      .value(schemaTest('json', JsonDateSchema, { created: new Date() }))
+      .isObject($);
   },
 
 

@@ -41,6 +41,11 @@ const STATUS_TEXT = {
   431: 'Request Header Fields Too Large',
   451: 'Unavailable For Legal Reasons',
   500: 'Internal Server Error',
+  502: 'Bad Gateway',
+  503: 'Service Unavailable',
+  504: 'Gateway Timeout',
+  507: 'Insufficient Storage',
+  511: 'Network Authentication Required',
 };
 
 
@@ -88,10 +93,18 @@ export async function schemaTest(dataType, schema, data, validator, status = 200
   // you provide a call-compatible validator. This is here primarily to support
   // some migrations of old code that is using a different validator than the
   // one this library currently uses.
-  validator = validator ??= validate;
+  validator ??= validate;
 
   // Use the Hono factory to create our middleware, just as a caller would.
   const middleware = validator(dataType, schema);
+
+  // Request bodies and response payloads have been through JSON serialization
+  // by the time the library sees them; mirror that here so a schema test cannot
+  // pass a value that could never travel over the wire.
+  const toWire = value => value === undefined ? value : JSON.parse(JSON.stringify(value));
+  if (dataType === 'json' || dataType === 'result') {
+    data = toWire(data);
+  }
 
   // A successful test captures the validated and masked JSON output, while a
   // failed test generates a failure JSON response and has a specific status
@@ -149,7 +162,7 @@ export async function schemaTest(dataType, schema, data, validator, status = 200
       param: () => data,
       json: async () => data,
 
-      // Query paramters must always return the value of a key as an array
+      // Query parameters must always return the value of a key as an array
       // since they can appear more than once; also, if you provide no key, you
       // get them all. We're precomputing here for no good reason.
       queries: (() => {
@@ -185,8 +198,8 @@ export async function schemaTest(dataType, schema, data, validator, status = 200
       addValidatedData: (target, data) => validData = data
     },
 
-    // If a failure occurs, the validator should call fail(), which invokes
-    // thee two endpoints to place an error status and JSON payload into the
+    // If a failure occurs, the validator should call fail(), which invokes the
+    // two endpoints to place an error status and JSON payload into the
     // response. Here we just create an actual response object, since that is
     // what the middleware would return.
     status: status => responseStatus = status,
