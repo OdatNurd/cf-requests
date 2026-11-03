@@ -434,25 +434,64 @@ export default Collection`Response Handlers`({
 
 
   "Route Handler": async () => {
+    const asyncMiddleware = async (ctx, next) => {
+      await next();
+    };
+    const syncMiddleware = (ctx, next) => next();
+    const asyncHandler = async (ctx) => success(ctx, "async ok", { id: 1 });
+    const syncHandler = (ctx) => success(ctx, "sync ok", { id: 2 });
+    const syncThrower = (ctx) => {
+      throw new SchemaError("sync fail", 422, []);
+    };
+    const zeroArity = () => {};
+
     const handler = routeHandler(
-      async (ctx, next) => {
-        await next();
-      },
-      async (ctx) => success(ctx, "ok", { id: 1 })
+      asyncMiddleware,
+      syncMiddleware,
+      asyncHandler,
+      syncHandler,
+      syncThrower,
+      zeroArity
     );
 
     await $check`routeHandler() returns every argument in order`
       .value(handler.length)
-      .eq($, 2);
+      .eq($, 6);
 
-    await $check`routeHandler() leaves multi-argument middleware untouched`
-      .value(handler[0].constructor.name)
+    await $check`routeHandler() leaves async middleware untouched`
+      .value(handler[0] === asyncMiddleware)
+      .eq($, true);
+
+    await $check`routeHandler() leaves sync middleware untouched`
+      .value(handler[1] === syncMiddleware)
+      .eq($, true);
+
+    await $check`routeHandler() leaves zero-argument functions untouched`
+      .value(handler[5] === zeroArity)
+      .eq($, true);
+
+    await $check`routeHandler() wraps an async single-argument handler in body()`
+      .value(handler[2].constructor.name)
       .eq($, 'AsyncFunction');
 
-    await $check`routeHandler() wraps single-argument handlers in body()`
-      .value(await handler[1](mockCtx()))
-      .eq($.success, true)
+    await $check`routeHandler() runs an async single-argument handler`
+      .value(await handler[2](mockCtx()))
+      .eq($.message, "async ok")
       .eq($.data.id, 1);
+
+    await $check`routeHandler() wraps a regular single-argument handler in body()`
+      .value(handler[3].constructor.name)
+      .eq($, 'AsyncFunction');
+
+    await $check`routeHandler() runs a regular single-argument handler`
+      .value(await handler[3](mockCtx()))
+      .eq($.message, "sync ok")
+      .eq($.data.id, 2);
+
+    await $check`routeHandler() catches errors from a regular handler`
+      .value(await handler[4](mockCtx()))
+      .eq($.status, 422)
+      .eq($.message, "sync fail");
   },
 
 
