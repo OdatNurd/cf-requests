@@ -2,7 +2,7 @@
 
 
 import { addCheck } from '@axel669/aegis';
-import { validate } from '../lib/handlers.js';
+import { body, json, validate } from '../lib/handlers.js';
 
 
 /******************************************************************************/
@@ -83,7 +83,7 @@ export function initializeRequestChecks() {
  * that carries the failure of the validation. This would be a response of code
  * 400 with a JSON body that carries the actual validation failure message
  * within it. */
-export async function schemaTest(dataType, schema, data, validator) {
+export async function schemaTest(dataType, schema, data, validator, status = 200) {
   // If a validator is provided, use it; otherwise use ours. This requires that
   // you provide a call-compatible validator. This is here primarily to support
   // some migrations of old code that is using a different validator than the
@@ -99,6 +99,8 @@ export async function schemaTest(dataType, schema, data, validator) {
   let validData = null;
   let errorResponse = null;
   let responseStatus = 200;
+  let resultMode = false;
+  let errorMode = false;
 
   // In order to handle formdata, cookie, and header validation we need a
   // request object to put into the context. These portions are parsed out of
@@ -123,12 +125,20 @@ export async function schemaTest(dataType, schema, data, validator) {
   // Create the response now.
   const rawRequest = new Request('http://localhost/', options)
 
+  // Result validation stores its validator in the context; the mock has to
+  // support the same get/set pair as Hono.
+  const store = new Map();
+
   // Construct a mock Hono context object to pass to the middleware. We have
   // here a mix of functions that the validator will call to get data that Hono
   // has already processed or should process, such as the JSON body or the
   // mapped request URI paramters, as well as a raw Request object for things
   // that Hono does not tend to parse, such as form data and headers.
   const ctx = {
+    env: {},
+    set: (key, value) => store.set(key, value),
+    get: (key) => store.get(key),
+
     req: {
       // The raw request; used by form data, headers, and cookies.
       raw: rawRequest,
@@ -181,6 +191,12 @@ export async function schemaTest(dataType, schema, data, validator) {
     // what the middleware would return.
     status: status => responseStatus = status,
     json: payload => {
+      // Result tests treat json() as the success path; everything else is a
+      // failure response produced by fail().
+      if (resultMode === true && errorMode === false) {
+        return payload;
+      }
+
       errorResponse = new Response(
         JSON.stringify(payload), {
           status: responseStatus,
@@ -188,6 +204,8 @@ export async function schemaTest(dataType, schema, data, validator) {
           headers: { "Content-Type": "application/json" }
         }
       );
+
+      return errorResponse;
     },
   };
 
@@ -195,6 +213,20 @@ export async function schemaTest(dataType, schema, data, validator) {
   // Run the middleware; we either capture a result in the error payload or the
   // validation result.
   await middleware(ctx, () => {});
+
+  // A result schema validates a response payload rather than request data. Run
+  // the payload through json() so the same validation, masking and error
+  // formatting as a real handler are applied.
+  if (dataType === 'result') {
+    resultMode = true;
+
+    try {
+      return await json(ctx, data, status);
+    } catch (err) {
+      errorMode = true;
+      return await body(() => { throw err; })(ctx);
+    }
+  }
 
   // Return the error payload if validation failed, otherwise return the
   // validated data from the success path.

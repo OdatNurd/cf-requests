@@ -92,6 +92,13 @@ export const NoMaskSchema = wrapJoker({
   }
 }, false);
 
+export const ResultSchema = wrapJoker({
+  root: {
+    "value1": "string",
+    "?value2": "number"
+  }
+});
+
 
 /******************************************************************************/
 
@@ -237,6 +244,30 @@ export default Collection`Schema Validation`({
     await $check`should fail if required cookie is missing`
       .value(schemaTest('cookie', CookieSchema, { 'theme': 'dark' }))
       .isResponseWithStatus($, 422);
+  },
+
+
+  /****************************************************************************/
+
+
+  "ResultSchema": async ({ runScope: ctx }) => {
+    await $check`should validate and mask result data`
+      .value(await schemaTest('result', ResultSchema, { value1: 'hello', value2: 2, extra: 'drop' }))
+      .isObject($)
+      .eq($.value1, 'hello')
+      .eq($.extra, undefined);
+
+    await $check`should fail result data that does not match the schema`
+      .value(await schemaTest('result', ResultSchema, { value1: 42 }))
+      .isResponseWithStatus($, 500);
+
+    await $check`should honor the requested status when selecting a result schema`
+      .value(await schemaTest('result', {
+        201: ResultSchema,
+        default: wrapJoker({ root: { "created": "bool" } })
+      }, { value1: 'hello' }, undefined, 201))
+      .isObject($)
+      .eq($.value1, 'hello');
   },
 
 
