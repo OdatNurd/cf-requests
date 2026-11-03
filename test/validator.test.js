@@ -266,6 +266,20 @@ export default Collection`Schema Validation`({
       .value(await faultyHandler(mockCtx()))
       .isObject()
       .eq($.data, undefined);
+
+    // A context can legitimately have no env at all, such as when a handler is
+    // exercised through Hono's app.request(); that must not turn a handled
+    // error into an unhandled one.
+    const bareCtx = () => ({
+      json: (payload) => payload,
+      status: () => {}
+    });
+
+    await $check`should not fail when the context has no env`
+      .value(await faultyHandler(bareCtx()))
+      .isObject($)
+      .eq($.success, false)
+      .eq($.status, 500);
   }
 });
 
