@@ -1,5 +1,5 @@
 import { Collection, $check, $ } from "@axel669/aegis";
-import { success, fail, validate, SchemaError, HttpError, body, json } from '../lib/handlers.js';
+import { success, fail, validate, SchemaError, HttpError, body, json, routeHandler } from '../lib/handlers.js';
 
 import { HTTPException } from 'hono/http-exception';
 
@@ -372,6 +372,47 @@ export default Collection`Response Handlers`({
     await $check`validate() explains a missing result schema`
       .value(error?.message)
       .eq($, "validation for 'result' requires a schema object");
+  },
+
+
+  /****************************************************************************/
+
+
+  "Route Handler": async () => {
+    const handler = routeHandler(
+      async (ctx, next) => {
+        await next();
+      },
+      async (ctx) => success(ctx, "ok", { id: 1 })
+    );
+
+    await $check`routeHandler() returns every argument in order`
+      .value(handler.length)
+      .eq($, 2);
+
+    await $check`routeHandler() leaves multi-argument middleware untouched`
+      .value(handler[0].constructor.name)
+      .eq($, 'AsyncFunction');
+
+    await $check`routeHandler() wraps single-argument handlers in body()`
+      .value(await handler[1](mockCtx()))
+      .eq($.success, true)
+      .eq($.data.id, 1);
+  },
+
+
+  /****************************************************************************/
+
+
+  "HTTP Error": async () => {
+    const handler = body(async () => {
+      throw new HttpError("teapot", 418);
+    });
+
+    await $check`body() uses the status from an HttpError`
+      .value(await handler(mockCtx()))
+      .eq($.status, 418)
+      .eq($.message, "teapot");
   },
 
 
