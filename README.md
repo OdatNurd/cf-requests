@@ -132,7 +132,7 @@ export const $post = routeHandler(
   // otherwise.
   validate('result', outputSchema),
 
-  // Async functions that take a single argument are route handlers;
+  // Functions that take a single argument (async or not) are route handlers;
   // they will be automatically guarded with a try/catch block
   async (ctx) => {
     // Pull out the validated JSON body.
@@ -148,6 +148,28 @@ export const $post = routeHandler(
     return success(ctx, 'request body validated', body);
   },
 );
+```
+
+
+### Using with bare Hono
+
+`routeHandler()` returns an array because that is what
+`@axel669/hono-file-routes` expects. Hono's route methods take handlers as
+separate arguments, so spread the array at the call site:
+
+```js
+app.post('/', ...routeHandler(
+  validate('json', inputSchema),
+  (ctx) => success(ctx, 'ok', ctx.req.valid('json')),
+));
+```
+
+If you would rather not spread inline, assign the array first and spread it at
+the route:
+
+```js
+const handlers = routeHandler(...);
+app.post('/', ...handlers);
 ```
 
 
@@ -201,6 +223,9 @@ For the `'result'` data type the payload is validated as the response body
 rather than being wrapped in the `success()` envelope, and `status` selects the
 matching schema from a status map. A failed check returns a `422` Response for
 input data and a `500` Response for result data.
+
+For a bodyless result status (`204`, `205` or `304`), the helper returns the
+null response instead of a payload.
 
 > ℹ️ By default, the test will use the `validate` function to perform the data
 > validation. If desired, you can pass an optional `validator` function as the
@@ -259,6 +284,11 @@ Aegis to simplify testing request and response schemas.
 
 ## Library Methods
 
+`success()`, `json()` and `fail()` require an integer status from `200` to
+`599`; any other value throws a `RangeError` before a response is created.
+Statuses `204`, `205` and `304` cannot carry a body, so the helpers return a
+null-body response for them and skip result validation.
+
 ```js
 export async function success(ctx, message, result=[], status=200) {}
 ```
@@ -276,7 +306,8 @@ status code is used to construct the JSON as well as the response object:
 ```
 
 `result` is optional and defaults to an empty array if not provided. Similarly
-`status` is optional and defaults to `200` if not provided.
+`status` is optional and defaults to `200` if not provided. For `204`, `205` and
+`304`, a null response is returned and result validation is skipped.
 
 If the `validate('result')` function was used to set a middleware to validate
 the result of the request handler, then this function will validate that the
@@ -302,7 +333,8 @@ instead of conforming the outgoing `JSON` to a specific format, the value of
 
 As with `success()`, the `validate()` function can be used to set up a
 `'result'` middleware which will cause this `JSON` to be validated and possibly
-masked prior to return.
+masked prior to return. The same status rules and bodyless behavior as
+`success()` apply.
 
 ---
 
@@ -321,7 +353,8 @@ one wants to specify the status of an error but it usually does not return any
 other meaningful result (which is the opposite of the `success` case).
 
 If `status` is not provided, it defaults to `400`, while if `result` is not
-provided, the `data` field will not be present in the result.
+provided, the `data` field will not be present in the result. For `204`, `205`
+and `304`, a null response is returned instead of JSON.
 
 Note that unlike `success()`, `fail()` will not honor the addition of an output
 validator via `validate('result')` on the result, since it is usually expected
@@ -372,7 +405,9 @@ code is used, which allows for using a different schema for different types of
 results.
 
 When operating this way, the key `'default'` specifies the schema to use for any
-status which does not have a specific schema defined.
+status which does not have a specific schema defined. If there is no `'default'`
+entry, a status that has no entry is sent without validation or masking. Add a
+`'default'` schema if every result must be checked.
 
 This means that, for the `'result'` validation type, these two calls will
 produce the same result:
@@ -404,6 +439,12 @@ that was caught.
 
 Exceptions of type `HttpError` carry a specific `HTTP` status code, which will
 be used in the call to `fail()`; all other exceptions use a status of `500`.
+
+Only `Error` instances are supported for thrown values. Throwing a non-`Error`
+(such as a string from another library) is not part of the supported contract:
+the wrapper falls back to `String(err)` for the message, but there is no stack
+or type information. Catch such values in your handler and rethrow an `Error`
+or `HttpError` if you need a predictable response.
 
 Hono's `HTTPException` is returned as-is, preserving its status, headers and
 body.
@@ -451,7 +492,9 @@ When `body()` catches an exception of this type, the `fail()` call it makes
 will use the status provided here as the `HTTP` status of the return.
 
 If `status` is not provided, it defaults to `500`, making this class generate an
-error with the same layout as any other exception class.
+error with the same layout as any other exception class. The status must be an
+integer from `200` to `599`; an invalid status throws a `RangeError` when the
+error is constructed.
 
 ---
 
@@ -475,12 +518,21 @@ export function routeHandler(...args) {}
 This small helper makes it slightly cleaner to set up a route handler by taking
 any number of arguments and returning them back as an array.
 
-As a part of this operation, any `async` function that takes exactly one argument
-is implicitly wrapped in `body()`. This makes the resulting handler somewhat
-cleaner looking, while still allowing for arbitrary middleware.
+As a part of this operation, any function that takes exactly one argument,
+whether or not it is `async`, is implicitly wrapped in `body()`. This makes the
+resulting handler somewhat cleaner looking, while still allowing for arbitrary
+middleware. Middleware should take `(ctx, next)` so it is not mistaken for a
+handler.
 
 The returned array can be exported directly (as in the example above) or spread
-into a standard Hono route: `app.post('/', ...routeHandler(...))`.
+into a standard Hono route:
+
+```js
+app.post('/', ...routeHandler(validate('json', inputSchema), handler));
+```
+
+The helper intentionally returns an array so that `hono-file-routes` can consume
+it directly; spread it at a bare Hono call site.
 
 ```js
 export const $post = routeHandler(
@@ -493,8 +545,8 @@ export const $post = routeHandler(
     await next();
   },
 
-  // Single argument async functions are wrapped in body(), so
-  // exceptions raised are handled consistently.
+  // Single argument functions (async or not) are wrapped in body(),
+  // so exceptions raised are handled consistently.
   async (ctx) => {
     const body = ctx.req.valid('json');
 
