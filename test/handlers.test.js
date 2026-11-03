@@ -350,6 +350,34 @@ export default Collection`Response Handlers`({
   /****************************************************************************/
 
 
+  "Schema Guards": async () => {
+    let error = null;
+    try {
+      validate('json', undefined);
+    } catch (exception) {
+      error = exception;
+    }
+
+    await $check`validate() explains a missing input schema`
+      .value(error?.message)
+      .eq($, "validation for 'json' requires a schema object");
+
+    error = null;
+    try {
+      validate('result', null);
+    } catch (exception) {
+      error = exception;
+    }
+
+    await $check`validate() explains a missing result schema`
+      .value(error?.message)
+      .eq($, "validation for 'result' requires a schema object");
+  },
+
+
+  /****************************************************************************/
+
+
   "Raw JSON Responses": async () => {
     const ctx = mockCtx();
 
