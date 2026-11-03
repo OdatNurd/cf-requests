@@ -1,6 +1,7 @@
 import { Collection, $check, $ } from "@axel669/aegis";
 import { success, fail, validate, SchemaError, HttpError, body, json, routeHandler } from '../lib/handlers.js';
 
+import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 
 import * as joker from "@axel669/joker";
@@ -413,6 +414,59 @@ export default Collection`Response Handlers`({
       .value(await handler(mockCtx()))
       .eq($.status, 418)
       .eq($.message, "teapot");
+  },
+
+
+  /****************************************************************************/
+
+
+  "Real Hono Responses": async () => {
+    const app = new Hono();
+
+    app.get('/success', body((ctx) => success(ctx, "ok", { id: 1 })));
+    app.get('/null', body((ctx) => json(ctx, null)));
+    app.get('/error', body(async () => { throw new Error("boom"); }));
+    app.get('/http', body(async () => { throw new HttpError("teapot", 418); }));
+    app.get('/exception', body(async () => {
+      throw new HTTPException(401, { message: "no auth" });
+    }));
+
+    const okResponse = await app.request('/success');
+    const okBody = await okResponse.json();
+
+    await $check`a real Hono request returns the success envelope`
+      .value(okBody)
+      .eq($.success, true)
+      .eq($.data.id, 1);
+
+    const nullResponse = await app.request('/null');
+
+    await $check`a real Hono request preserves a null body`
+      .value(await nullResponse.text())
+      .eq($, 'null');
+
+    const errorResponse = await app.request('/error');
+    const errorBody = await errorResponse.json();
+
+    await $check`a handler without an env still returns the JSON error envelope`
+      .value(errorResponse.status)
+      .eq($, 500);
+
+    await $check`the env-less error envelope is the standard one`
+      .value(errorBody.success)
+      .eq($, false);
+
+    const httpResponse = await app.request('/http');
+
+    await $check`a real Hono request honors HttpError statuses`
+      .value(httpResponse.status)
+      .eq($, 418);
+
+    const exceptionResponse = await app.request('/exception');
+
+    await $check`a real Hono request honors HTTPException statuses`
+      .value(exceptionResponse.status)
+      .eq($, 401);
   },
 
 

@@ -116,7 +116,7 @@ export default Collection`Schema Validation`({
   "Masking": async ({ runScope: ctx }) => {
     await $check`should mask away extra fields when mask function is present`
       .value(schemaTest('json', MaskSchema, { field1: 'hello', field2: 'world' }))
-      .isObject()
+      .isObject($)
       .eq($.field1, 'hello')
       .eq($.field2, undefined);
 
