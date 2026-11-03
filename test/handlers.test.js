@@ -1,5 +1,7 @@
 import { Collection, $check, $ } from "@axel669/aegis";
-import { success, fail, validate, SchemaError, body, json } from '../lib/handlers.js';
+import { success, fail, validate, SchemaError, HttpError, body, json } from '../lib/handlers.js';
+
+import { HTTPException } from 'hono/http-exception';
 
 import * as joker from "@axel669/joker";
 
@@ -36,7 +38,7 @@ const mockCtx = (env = {}) => {
 
     // Emulate response helpers
     status: (code) => { currentStatus = code; },
-    json: (payload) => ({
+    json: (payload) => payload === null ? null : ({
       ...payload,
 
       // We attach the status here so we can verify it in tests, even though
@@ -254,6 +256,94 @@ export default Collection`Response Handlers`({
      .eq($.success, false)
      .eq($.status, 422)
      .eq($.data[0], "manual (got 'undefined')");
+
+    const stringHandler = body(async () => {
+      throw "boom";
+    });
+
+    await $check`body() reports a thrown non-Error value`
+      .value(await stringHandler(ctx))
+      .eq($.status, 500)
+      .eq($.message, "boom");
+  },
+
+
+  /****************************************************************************/
+
+
+  "Validation Error Formatting": async () => {
+    const ctx = mockCtx();
+
+    const mixedHandler = body(async () => {
+      throw new SchemaError("Invalid", 422, [
+        { message: "item is wrong", value: 1 },
+        "not an error object",
+        null
+      ]);
+    });
+
+    await $check`body() formats error objects and leaves other entries alone`
+      .value(await mixedHandler(ctx))
+      .eq($.status, 422)
+      .isArray($.data)
+      .eq($.data[0], "item is wrong (got '1')")
+      .eq($.data[1], "not an error object")
+      .eq($.data[2], null);
+  },
+
+
+  /****************************************************************************/
+
+
+  "Foreign Error Copies": async () => {
+    // Importing the module through a different URL creates a second copy with
+    // its own classes, which is what a duplicated dependency looks like.
+    const foreign = await import('../lib/handlers.js?foreign-copy');
+
+    await $check`a foreign HttpError is not an instance of this copy's class`
+      .value(new foreign.HttpError("teapot", 418) instanceof HttpError)
+      .eq($, false);
+
+    const schemaHandler = body(async () => {
+      throw new foreign.SchemaError("foreign", 422, [
+        { message: "bad", value: "data" }
+      ]);
+    });
+
+    await $check`body() honours the status and data of a foreign SchemaError`
+      .value(await schemaHandler(mockCtx()))
+      .eq($.status, 422)
+      .isArray($.data)
+      .eq($.data[0], "bad (got 'data')");
+
+    const httpHandler = body(async () => {
+      throw new foreign.HttpError("foreign status", 418);
+    });
+
+    await $check`body() honours the status of a foreign HttpError`
+      .value(await httpHandler(mockCtx()))
+      .eq($.status, 418);
+  },
+
+
+  /****************************************************************************/
+
+
+  "Hono HTTP Exceptions": async () => {
+    const handler = body(async () => {
+      throw new HTTPException(401, { message: "no auth" });
+    });
+
+    const response = await handler(mockCtx());
+
+    await $check`body() returns Hono's response for an HTTPException`
+      .value(response)
+      .instanceof($, Response)
+      .eq($.status, 401);
+
+    await $check`the HTTPException response carries its message`
+      .value(await response.text())
+      .eq($, "no auth");
   },
 
 
@@ -273,6 +363,12 @@ export default Collection`Response Handlers`({
       .value(await json(ctx, { created: true }, 201))
       .eq($.created, true)
       .eq($._httpStatus, 201);
+
+    const nullCtx = mockCtx();
+
+    await $check`json() preserves an explicit null body`
+      .value(await json(nullCtx, null))
+      .eq($, null);
 
     // Manually run the verify middleware to inject the RawJSONSchema validator
     await validate('result', RawJSONSchema)(ctx, async () => {});
