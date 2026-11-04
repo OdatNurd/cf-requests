@@ -186,8 +186,12 @@ helpers into your own project's `devDependencies` if you have not already done
 so.
 
 ```sh
-pnpm add -D @axel669/aegis @axel669/joker @odatnurd/cf-aegis miniflare
+pnpm add -D @axel669/aegis @axel669/joker @odatnurd/cf-aegis miniflare json5 smol-toml
 ```
+
+`@odatnurd/cf-aegis` requires `json5` and `smol-toml` to load Wrangler
+configuration files, so they are listed explicitly for package managers that
+do not install peer dependencies automatically.
 
 `hono` is a required peer and is installed with the package.
 
