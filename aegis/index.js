@@ -1,7 +1,7 @@
 /******************************************************************************/
 
 
-import { addCheck } from '@axel669/aegis';
+import { aegis } from '@axel669/aegis';
 import { body, json, validate } from '../lib/handlers.js';
 
 
@@ -58,7 +58,7 @@ const STATUS_TEXT = {
  *
  * This is entirely optional.
  */
-export function initializeRequestChecks() {
+export function initializeRequestChecks(aegisApi = aegis) {
   // A Response from another realm (for example, one created by workerd in a
   // Miniflare test) is not an instance of this realm's Response class, so fall
   // back to the shape that all Response objects share.
@@ -71,18 +71,24 @@ export function initializeRequestChecks() {
      typeof source.arrayBuffer === 'function');
 
   // Check that a value is a response object from our middleware
-  addCheck.value.isResponse(
-    source => isResponse(source)
-  );
+  aegisApi.createAssertion({
+    name: 'isResponse',
+    type: 'value',
+    run: source => isResponse(source)
+  });
 
   // Check that a value is NOT a response object
-  addCheck.value.isNotResponse(
-    source => isResponse(source) === false
-  );
+  aegisApi.createAssertion({
+    name: 'isNotResponse',
+    type: 'value',
+    run: source => isResponse(source) === false
+  });
 
-  addCheck.value.isResponseWithStatus(
-    (source, status) => isResponse(source) && source.status === status
-  );
+  aegisApi.createAssertion({
+    name: 'isResponseWithStatus',
+    type: 'value',
+    run: (source, status) => isResponse(source) && source.status === status
+  });
 }
 
 
@@ -234,7 +240,6 @@ export async function schemaTest(dataType, schema, data, validator, status = 200
     },
   };
 
-  // Execute the middleware with an empty next().
   // Run the middleware; we either capture a result in the error payload or the
   // validation result.
   await middleware(ctx, () => {});

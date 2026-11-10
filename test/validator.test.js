@@ -1,6 +1,7 @@
-import { Collection, $check, $ } from "@axel669/aegis";
+import { aegis, $ } from "@axel669/aegis";
 import { schemaTest } from "../aegis/index.js";
 import { body } from '../lib/handlers.js';
+import { caught } from "./aegis_setup.js";
 
 import * as joker from "@axel669/joker";
 
@@ -36,6 +37,9 @@ function wrapJoker(schemaDef, includeMask = true) {
 
 
 /******************************************************************************/
+
+
+export const name = "Schema Validation";
 
 
 export const JsonSchema = wrapJoker({
@@ -109,243 +113,285 @@ export const ResultSchema = wrapJoker({
 /******************************************************************************/
 
 
-/* This overall collection exercises that our validation wrapper and the test
- * wrapper for it are both working correctly for all of the types of validation
- * that Hono is capable of doing, since it involvesus faking a Hono context. */
-export default Collection`Schema Validation`({
-  "Masking": async ({ runScope: ctx }) => {
-    await $check`should mask away extra fields when mask function is present`
-      .value(schemaTest('json', MaskSchema, { field1: 'hello', field2: 'world' }))
-      .isObject($)
-      .eq($.field1, 'hello')
-      .eq($.field2, undefined);
+aegis.test`Masking`(async () => {
+  const masked = await schemaTest('json', MaskSchema, { field1: 'hello', field2: 'world' });
+  $.check`should mask away extra fields when mask function is present`(
+    $.isObject(masked),
+    $.eq(masked.field1, 'hello'),
+    $.eq(masked.field2, undefined)
+  );
 
-    await $check`should not mask away extra fields when mask function is absent`
-      .value(schemaTest('json', NoMaskSchema, { field1: 'hello', field2: 'world' }))
-      .isObject()
-      .eq($.field1, 'hello')
-      .eq($.field2, 'world');
-  },
+  const unmasked = await schemaTest('json', NoMaskSchema, { field1: 'hello', field2: 'world' });
+  $.check`should not mask away extra fields when mask function is absent`(
+    $.isObject(unmasked),
+    $.eq(unmasked.field1, 'hello'),
+    $.eq(unmasked.field2, 'world')
+  );
+});
 
 
-  /****************************************************************************/
+/******************************************************************************/
 
 
-  "JsonSchema": async ({ runScope: ctx }) => {
-    await $check`should succeed with valid required and optional json data`
-      .value(schemaTest('json', JsonSchema, { userId: 123, isActive: true }))
-      .isObject()
-      .eq($.userId, 123)
-      .eq($.isActive, true);
+aegis.test`JsonSchema`(async () => {
+  const withOptional = await schemaTest('json', JsonSchema, { userId: 123, isActive: true });
+  $.check`should succeed with valid required and optional json data`(
+    $.isObject(withOptional),
+    $.eq(withOptional.userId, 123),
+    $.eq(withOptional.isActive, true)
+  );
 
-    await $check`should succeed with only required json data`
-      .value(schemaTest('json', JsonSchema, { userId: 456 }))
-      .isObject()
-      .eq($.userId, 456);
+  const requiredOnly = await schemaTest('json', JsonSchema, { userId: 456 });
+  $.check`should succeed with only required json data`(
+    $.isObject(requiredOnly),
+    $.eq(requiredOnly.userId, 456)
+  );
 
-    await $check`should fail if required json data is missing`
-      .value(schemaTest('json', JsonSchema, { isActive: false }))
-      .isResponseWithStatus($, 422);
+  const missing = await schemaTest('json', JsonSchema, { isActive: false });
+  $.check`should fail if required json data is missing`(
+    $.isResponseWithStatus(missing, 422)
+  );
 
-    await $check`should validate json data after it has been serialized`
-      .value(schemaTest('json', JsonDateSchema, { created: new Date() }))
-      .isObject($);
-  },
-
-
-  /****************************************************************************/
-
-
-  "FormSchema": async ({ runScope: ctx }) => {
-    await $check`should succeed with valid required and optional form data`
-      .value(schemaTest('form', FormSchema, { username: 'testuser', avatar: new File([], 'avatar.png') }))
-      .isObject()
-      .eq($.username, 'testuser');
-
-    await $check`should succeed with only required form data`
-      .value(schemaTest('form', FormSchema, { username: 'testuser' }))
-      .isObject()
-      .eq($.username, 'testuser');
-
-    await $check`should fail if required form data is missing`
-      .value(schemaTest('form', FormSchema, { avatar: new File([], 'avatar.png') }))
-      .isResponseWithStatus($, 422);
-  },
+  const serialized = await schemaTest('json', JsonDateSchema, { created: new Date() });
+  $.check`should validate json data after it has been serialized`(
+    $.isObject(serialized)
+  );
+});
 
 
-  /****************************************************************************/
+/******************************************************************************/
 
 
-  "QuerySchema": async ({ runScope: ctx }) => {
-    await $check`should succeed with valid required and optional query params`
-      .value(schemaTest('query', QuerySchema, { search: 'testing', page: '2' }))
-      .isObject()
-      .eq($.search, 'testing')
-      .eq($.page, '2');
+aegis.test`FormSchema`(async () => {
+  const withOptional = await schemaTest('form', FormSchema, {
+    username: 'testuser',
+    avatar: new File([], 'avatar.png')
+  });
+  $.check`should succeed with valid required and optional form data`(
+    $.isObject(withOptional),
+    $.eq(withOptional.username, 'testuser')
+  );
 
-    await $check`should succeed with only required query param`
-      .value(schemaTest('query', QuerySchema, { search: 'testing' }))
-      .isObject()
-      .eq($.search, 'testing');
+  const requiredOnly = await schemaTest('form', FormSchema, { username: 'testuser' });
+  $.check`should succeed with only required form data`(
+    $.isObject(requiredOnly),
+    $.eq(requiredOnly.username, 'testuser')
+  );
 
-    await $check`should fail if required query param is missing`
-      .value(schemaTest('query', QuerySchema, { page: '2' }))
-      .isResponseWithStatus($, 422);
-  },
-
-
-  /****************************************************************************/
-
-
-  "ParamSchema": async ({ runScope: ctx }) => {
-    await $check`should succeed with valid required and optional url params`
-      .value(schemaTest('param', ParamSchema, { id: 'user-123', format: 'json' }))
-      .isObject()
-      .eq($.id, 'user-123')
-      .eq($.format, 'json');
-
-    await $check`should succeed with only required url param`
-      .value(schemaTest('param', ParamSchema, { id: 'user-123' }))
-      .isObject()
-      .eq($.id, 'user-123');
-
-    await $check`should fail if required url param is missing`
-      .value(schemaTest('param', ParamSchema, { format: 'json' }))
-      .isResponseWithStatus($, 422);
-  },
+  const missing = await schemaTest('form', FormSchema, {
+    avatar: new File([], 'avatar.png')
+  });
+  $.check`should fail if required form data is missing`(
+    $.isResponseWithStatus(missing, 422)
+  );
+});
 
 
-  /****************************************************************************/
+/******************************************************************************/
 
 
-  "HeaderSchema": async ({ runScope: ctx }) => {
-    await $check`should succeed with valid required and optional headers`
-      .value(schemaTest('header', HeaderSchema, { 'x_request_id': 'xyz-123', 'x_api_version': '2' }))
-      .isObject()
-      .eq($['x_request_id'], 'xyz-123')
-      .eq($['x_api_version'], '2');
+aegis.test`QuerySchema`(async () => {
+  const withOptional = await schemaTest('query', QuerySchema, { search: 'testing', page: '2' });
+  $.check`should succeed with valid required and optional query params`(
+    $.isObject(withOptional),
+    $.eq(withOptional.search, 'testing'),
+    $.eq(withOptional.page, '2')
+  );
 
-    await $check`should succeed with only required header`
-      .value(schemaTest('header', HeaderSchema, { 'x_request_id': 'xyz-123' }))
-      .isObject()
-      .eq($['x_request_id'], 'xyz-123');
+  const requiredOnly = await schemaTest('query', QuerySchema, { search: 'testing' });
+  $.check`should succeed with only required query param`(
+    $.isObject(requiredOnly),
+    $.eq(requiredOnly.search, 'testing')
+  );
 
-    await $check`should fail if required header is missing`
-      .value(schemaTest('header', HeaderSchema, { 'x_api_version': '2' }))
-      .isResponseWithStatus($, 422);
-  },
-
-
-  /****************************************************************************/
-
-
-  "CookieSchema": async ({ runScope: ctx }) => {
-    await $check`should succeed with valid required and optional cookies`
-      .value(schemaTest('cookie', CookieSchema, { 'session_id': 'abc-456', 'theme': 'dark' }))
-      .isObject()
-      .eq($['session_id'], 'abc-456')
-      .eq($.theme, 'dark');
-
-    await $check`should succeed with only required cookie`
-      .value(schemaTest('cookie', CookieSchema, { 'session_id': 'abc-456' }))
-      .isObject()
-      .eq($['session_id'], 'abc-456');
-
-    await $check`should fail if required cookie is missing`
-      .value(schemaTest('cookie', CookieSchema, { 'theme': 'dark' }))
-      .isResponseWithStatus($, 422);
-  },
+  const missing = await schemaTest('query', QuerySchema, { page: '2' });
+  $.check`should fail if required query param is missing`(
+    $.isResponseWithStatus(missing, 422)
+  );
+});
 
 
-  /****************************************************************************/
+/******************************************************************************/
 
 
-  "ResultSchema": async ({ runScope: ctx }) => {
-    await $check`should validate and mask result data`
-      .value(await schemaTest('result', ResultSchema, { value1: 'hello', value2: 2, extra: 'drop' }))
-      .isObject($)
-      .eq($.value1, 'hello')
-      .eq($.extra, undefined);
+aegis.test`ParamSchema`(async () => {
+  const withOptional = await schemaTest('param', ParamSchema, { id: 'user-123', format: 'json' });
+  $.check`should succeed with valid required and optional url params`(
+    $.isObject(withOptional),
+    $.eq(withOptional.id, 'user-123'),
+    $.eq(withOptional.format, 'json')
+  );
 
-    await $check`should fail result data that does not match the schema`
-      .value(await schemaTest('result', ResultSchema, { value1: 42 }))
-      .isResponseWithStatus($, 500);
+  const requiredOnly = await schemaTest('param', ParamSchema, { id: 'user-123' });
+  $.check`should succeed with only required url param`(
+    $.isObject(requiredOnly),
+    $.eq(requiredOnly.id, 'user-123')
+  );
 
-    await $check`should honor the requested status when selecting a result schema`
-      .value(await schemaTest('result', {
-        201: ResultSchema,
-        default: wrapJoker({ root: { "created": "bool" } })
-      }, { value1: 'hello' }, undefined, 201))
-      .isObject($)
-      .eq($.value1, 'hello');
-
-    await $check`should return a null response for a bodyless result status`
-      .value(await schemaTest('result', ResultSchema, { value1: 'hello' }, undefined, 204))
-      .isResponseWithStatus($, 204);
-  },
+  const missing = await schemaTest('param', ParamSchema, { format: 'json' });
+  $.check`should fail if required url param is missing`(
+    $.isResponseWithStatus(missing, 422)
+  );
+});
 
 
-  /****************************************************************************/
+/******************************************************************************/
 
 
-  "Response Checks": async ({ runScope: ctx }) => {
-    const responseLike = {
-      status: 200,
-      headers: new Headers(),
-      arrayBuffer: async () => new ArrayBuffer(0)
-    };
+aegis.test`HeaderSchema`(async () => {
+  const withOptional = await schemaTest('header', HeaderSchema, {
+    'x_request_id': 'xyz-123',
+    'x_api_version': '2'
+  });
+  $.check`should succeed with valid required and optional headers`(
+    $.isObject(withOptional),
+    $.eq(withOptional['x_request_id'], 'xyz-123'),
+    $.eq(withOptional['x_api_version'], '2')
+  );
 
-    await $check`should accept a response-like object from another realm`
-      .value(responseLike)
-      .isResponse($);
+  const requiredOnly = await schemaTest('header', HeaderSchema, {
+    'x_request_id': 'xyz-123'
+  });
+  $.check`should succeed with only required header`(
+    $.isObject(requiredOnly),
+    $.eq(requiredOnly['x_request_id'], 'xyz-123')
+  );
 
-    await $check`should not accept a plain object as a response`
-      .value({ status: 200 })
-      .isNotResponse($);
-  },
+  const missing = await schemaTest('header', HeaderSchema, { 'x_api_version': '2' });
+  $.check`should fail if required header is missing`(
+    $.isResponseWithStatus(missing, 422)
+  );
+});
 
 
-  /****************************************************************************/
+/******************************************************************************/
 
 
-  "Exception Stack Traces": async ({ runScope: ctx }) => {
-    // A simple handler that always throws an error
-    const faultyHandler = body(async (ctx) => {
-      throw new Error("This is a test exception");
-    });
+aegis.test`CookieSchema`(async () => {
+  const withOptional = await schemaTest('cookie', CookieSchema, {
+    'session_id': 'abc-456',
+    'theme': 'dark'
+  });
+  $.check`should succeed with valid required and optional cookies`(
+    $.isObject(withOptional),
+    $.eq(withOptional['session_id'], 'abc-456'),
+    $.eq(withOptional.theme, 'dark')
+  );
 
-    // A mock context for testing
-    const mockCtx = (env = {}) => ({
-      env,
-      json: (payload) => payload,
-      status: () => {}
-    });
+  const requiredOnly = await schemaTest('cookie', CookieSchema, {
+    'session_id': 'abc-456'
+  });
+  $.check`should succeed with only required cookie`(
+    $.isObject(requiredOnly),
+    $.eq(requiredOnly['session_id'], 'abc-456')
+  );
 
-    await $check`should include a stack trace when env var is set`
-      .value(await faultyHandler(mockCtx({ CF_REQUESTS_STACKTRACE: 'true' })))
-      .isObject()
-      .isArray($.data)
-      .gt($.data.length, 0);
+  const missing = await schemaTest('cookie', CookieSchema, { 'theme': 'dark' });
+  $.check`should fail if required cookie is missing`(
+    $.isResponseWithStatus(missing, 422)
+  );
+});
 
-    await $check`should not include a stack trace when env var is not set`
-      .value(await faultyHandler(mockCtx()))
-      .isObject()
-      .eq($.data, undefined);
 
-    // A context can legitimately have no env at all, such as when a handler is
-    // exercised through Hono's app.request(); that must not turn a handled
-    // error into an unhandled one.
-    const bareCtx = () => ({
-      json: (payload) => payload,
-      status: () => {}
-    });
+/******************************************************************************/
 
-    await $check`should not fail when the context has no env`
-      .value(await faultyHandler(bareCtx()))
-      .isObject($)
-      .eq($.success, false)
-      .eq($.status, 500);
-  }
+
+aegis.test`ResultSchema`(async () => {
+  const masked = await schemaTest('result', ResultSchema, {
+    value1: 'hello',
+    value2: 2,
+    extra: 'drop'
+  });
+  $.check`should validate and mask result data`(
+    $.isObject(masked),
+    $.eq(masked.value1, 'hello'),
+    $.eq(masked.extra, undefined)
+  );
+
+  const invalid = await schemaTest('result', ResultSchema, { value1: 42 });
+  $.check`should fail result data that does not match the schema`(
+    $.isResponseWithStatus(invalid, 500)
+  );
+
+  const selected = await schemaTest('result', {
+    201: ResultSchema,
+    default: wrapJoker({ root: { "created": "bool" } })
+  }, { value1: 'hello' }, undefined, 201);
+  $.check`should honor the requested status when selecting a result schema`(
+    $.isObject(selected),
+    $.eq(selected.value1, 'hello')
+  );
+
+  const bodyless = await schemaTest('result', ResultSchema, { value1: 'hello' }, undefined, 204);
+  $.check`should return a null response for a bodyless result status`(
+    $.isResponseWithStatus(bodyless, 204)
+  );
+});
+
+
+/******************************************************************************/
+
+
+aegis.test`Response Checks`(async () => {
+  const responseLike = {
+    status: 200,
+    headers: new Headers(),
+    arrayBuffer: async () => new ArrayBuffer(0)
+  };
+
+  $.check`should accept a response-like object from another realm`(
+    $.isResponse(responseLike)
+  );
+
+  $.check`should not accept a plain object as a response`(
+    $.isNotResponse({ status: 200 })
+  );
+});
+
+
+/******************************************************************************/
+
+
+aegis.test`Exception Stack Traces`(async () => {
+  // A simple handler that always throws an error
+  const faultyHandler = body(async (ctx) => {
+    throw new Error("This is a test exception");
+  });
+
+  // A mock context for testing
+  const mockCtx = (env = {}) => ({
+    env,
+    json: (payload) => payload,
+    status: () => {}
+  });
+
+  const withStack = await faultyHandler(mockCtx({ CF_REQUESTS_STACKTRACE: 'true' }));
+  $.check`should include a stack trace when env var is set`(
+    $.isObject(withStack),
+    $.isArray(withStack.data),
+    $.gt(withStack.data.length, 0)
+  );
+
+  const withoutStack = await faultyHandler(mockCtx());
+  $.check`should not include a stack trace when env var is not set`(
+    $.isObject(withoutStack),
+    $.eq(withoutStack.data, undefined)
+  );
+
+  // A context can legitimately have no env at all, such as when a handler is
+  // exercised through Hono's app.request(); that must not turn a handled error
+  // into an unhandled one.
+  const bareCtx = () => ({
+    json: (payload) => payload,
+    status: () => {}
+  });
+
+  const bare = await faultyHandler(bareCtx());
+  $.check`should not fail when the context has no env`(
+    $.isObject(bare),
+    $.eq(bare.success, false),
+    $.eq(bare.status, 500)
+  );
 });
 
 

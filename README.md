@@ -202,10 +202,13 @@ aid in setting up tests:
 ### Aegis Helper Functions
 
 ```javascript
-export function initializeRequestChecks() {}
+export function initializeRequestChecks(aegisApi = aegis) {}
 ```
-Registers all [custom checks](#custom-checks) with `Aegis`. This should be
-called once at the top of your `aegis.config.js` file.
+Registers all [custom checks](#custom-checks) with `Aegis`. Call it in each test
+file, or in a module imported by each test file: Aegis 0.4 runs test files in
+isolated worker threads, and assertion registrations are per worker. The
+optional `aegisApi` argument lets a linked or duplicated copy of
+`@axel669/aegis` register the checks on the instance the test file uses.
 
 ---
 
@@ -240,13 +243,23 @@ null response instead of a payload.
 
 ### Aegis Test Configuration
 
-You can import the helper functions into your `aegis.config.js` file to easily
-set up a test environment, optionally also populating one or more SQL files into
-the database first in order to set up testing.
+Aegis 0.4 no longer supports config-level setup hooks. List the files in
+`aegis.config.js`, then register the checks in each test file (or a shared setup
+module). If a test needs a Miniflare worker, create it with `aegis.setup` in the
+same file and dispose of it in a final setup entry.
 
 **Example `aegis.config.js`:**
 
 ```js
+export const files = [
+  "test/**/*.test.js",
+];
+```
+
+**Example test setup:**
+
+```js
+import { aegis } from '@axel669/aegis';
 import {
   initializeCustomChecks,
   aegisSetup,
@@ -254,25 +267,24 @@ import {
 } from '@odatnurd/cf-aegis';
 import { initializeRequestChecks } from '@odatnurd/cf-requests/aegis';
 
-initializeCustomChecks();
-initializeRequestChecks();
+initializeCustomChecks(aegis);
+initializeRequestChecks(aegis);
 
-export const config = {
-    files: [
-        "test/**/*.test.js",
-    ],
-    hooks: {
-        async setup(ctx) {
-            await aegisSetup(ctx, 'test/setup.sql', 'DB');
-        },
+aegis.setup(async (state) => {
+  state.ctx = {};
+  await aegisSetup(state.ctx);
+});
 
-        async teardown(ctx) {
-            await aegisTeardown(ctx);
-        },
-    },
-    failAction: "afterSection",
-}
+aegis.test`...`(async (state) => {
+  // tests
+});
+
+aegis.setup(async (state) => {
+  await aegisTeardown(state.ctx);
+});
 ```
+
+If the tests do not need a Miniflare worker, omit the two `aegis.setup` entries.
 
 
 ### Custom Checks
@@ -280,10 +292,10 @@ export const config = {
 The `initializeRequestChecks()` function registers several custom checks with
 Aegis to simplify testing request and response schemas.
 
-* `.isResponse($)`: Checks if a value is a `Response` object.
-* `.isNotResponse($)`: Checks if a value is not a `Response` object.
-* `.isResponseWithStatus($, count)`: Checks if an object is a `Response` with a
-  specific `status` code.
+* `$.isResponse(value)`: Checks if a value is a `Response` object.
+* `$.isNotResponse(value)`: Checks if a value is not a `Response` object.
+* `$.isResponseWithStatus(value, status)`: Checks if an object is a `Response`
+  with a specific `status` code.
 
 
 ## Library Methods
@@ -382,8 +394,9 @@ or `json()` from within the route handler.
 The second parameter should be an object that contains a `validate` and an
 (optional) `mask` member:
 
-- `validate` takes the item to validate, and returns `true` when the data given
-  is valid. Any other return value is considered to be an error.
+- `validate` takes the item to validate, and returns an array of error
+  objects. An empty array means the data given is valid; any entries in the
+  array are considered to be errors.
 - `mask` takes as an input the same item passed to `validate`, and returns a
   masked version of the data that strips fields from the object that do not
   appear in the schema.
